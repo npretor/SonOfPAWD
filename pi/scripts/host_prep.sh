@@ -5,13 +5,11 @@ set -euo pipefail
 echo "== apt packages =="
 sudo apt update
 sudo apt install -y \
+    rpicam-apps \
     gstreamer1.0-tools \
     gstreamer1.0-plugins-base \
     gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad \
-    gstreamer1.0-plugins-ugly \
-    gstreamer1.0-libav \
-    gstreamer1.0-libcamera \
     gstreamer1.0-rtsp \
     gir1.2-gst-rtsp-server-1.0 \
     python3-gst-1.0 \
@@ -24,21 +22,23 @@ sudo apt install -y \
 echo "== enable lingering so user units run without login =="
 sudo loginctl enable-linger "$USER"
 
-echo "== verify libcamerasrc is available =="
-if gst-inspect-1.0 libcamerasrc >/dev/null 2>&1; then
-    echo "  libcamerasrc: OK"
+echo "== verify rpicam-vid (our encoder path) =="
+if command -v rpicam-vid >/dev/null 2>&1; then
+    echo "  rpicam-vid: $(command -v rpicam-vid)"
 else
-    echo "  libcamerasrc NOT FOUND — check gstreamer1.0-libcamera install"
+    echo "  rpicam-vid NOT FOUND -- install rpicam-apps"
     exit 1
 fi
 
-echo "== verify v4l2h264enc is available =="
-if gst-inspect-1.0 v4l2h264enc >/dev/null 2>&1; then
-    echo "  v4l2h264enc: OK"
-else
-    echo "  v4l2h264enc NOT FOUND — check v4l2 m2m drivers"
-    exit 1
-fi
+echo "== quick smoke test (2s capture to /dev/null) =="
+rpicam-vid -t 2000 -n --inline --codec h264 -o /dev/null >/dev/null 2>&1 \
+    && echo "  rpicam-vid smoke test: OK" \
+    || { echo "  rpicam-vid smoke test FAILED"; exit 1; }
+
+echo "== verify gst-rtsp-server python bindings =="
+python3 -c "import gi; gi.require_version('GstRtspServer','1.0'); from gi.repository import GstRtspServer" \
+    && echo "  GstRtspServer python bindings: OK" \
+    || { echo "  GstRtspServer bindings MISSING -- install gir1.2-gst-rtsp-server-1.0"; exit 1; }
 
 echo "== done =="
-echo "Next: scp pi/systemd/*.service to ~/.config/systemd/user/ and enable them."
+echo "Next: deploy from the Nano with 'make -C deploy deploy-pi install-pi-units enable-pi-units'."
