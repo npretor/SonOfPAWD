@@ -1,0 +1,5 @@
+# Pi-side Python deps. Intended to be installed via apt on Pi OS:
+#   sudo apt install python3-paho-mqtt python3-gpiozero python3-gi python3-gst-1.0
+# Listed here for venv-based dev setups.
+-r ../common/requirements.txt
+gpiozero>=2.0

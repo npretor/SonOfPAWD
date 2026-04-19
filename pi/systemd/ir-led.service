@@ -1,0 +1,17 @@
+[Unit]
+Description=SonOfPAWD ir-led (MQTT -> GPIO)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/SonOfPAWD
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m pi.src.ir_led.main
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

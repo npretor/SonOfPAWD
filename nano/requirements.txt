@@ -1,0 +1,4 @@
+# Nano-side Python deps. Intended to be installed via apt on Ubuntu / L4T:
+#   sudo apt install python3-paho-mqtt python3-gi python3-gst-1.0
+# Listed here for venv-based dev setups.
+-r ../common/requirements.txt
