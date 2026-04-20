@@ -35,7 +35,7 @@ PIPELINE = (
     f"rtspsrc location={RTSP_URL} protocols=tcp latency=100 name=src "
     "! rtph264depay ! h264parse "
     "! valve name=gate drop=true "
-    "! splitmuxsink name=mux muxer=mp4mux "
+    "! splitmuxsink name=mux muxer=matroskamux "
     "  max-size-time=0 max-size-bytes=0"
 )
 
@@ -127,7 +127,7 @@ class Recorder:
 
     def _on_format_location(self, _mux, _fragment_id):
         ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = os.path.join(CLIPS_DIR, f"clip_{ts}.mp4")
+        path = os.path.join(CLIPS_DIR, f"clip_{ts}.mkv")
         log.info("clip starting: %s", path)
         self.mqtt.publish(TOPIC_RECORDER_EVENT, {
             "event": "clip_started",
