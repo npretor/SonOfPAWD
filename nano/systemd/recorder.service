@@ -1,0 +1,18 @@
+[Unit]
+Description=SonOfPAWD recorder (RTSP -> MP4 clips)
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Repo path on the Nano. Edit if your checkout lives elsewhere.
+WorkingDirectory=%h/github/SonOfPAWD
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m nano.src.recorder.main
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

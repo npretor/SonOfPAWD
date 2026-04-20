@@ -7,23 +7,37 @@ PI_USER   ?= nathan
 PI_DEST   ?= /home/$(PI_USER)/SonOfPAWD
 SSH_OPTS  ?= -o StrictHostKeyChecking=accept-new
 
-PI_SERVICES := camera-pipeline sensor-wakeup ir-led
+PI_SERVICES   := camera-pipeline sensor-wakeup ir-led
+NANO_SERVICES := recorder
+
+NANO_USER_UNIT_DIR := $(HOME)/.config/systemd/user
 
 RSYNC_FLAGS := -avz --delete --exclude-from=$(REPO_ROOT)/deploy/rsync-exclude.txt
 
-.PHONY: help deploy-pi install-pi-units enable-pi-units restart-pi stop-pi start-pi logs-pi status-pi ssh-pi
+.PHONY: help \
+        deploy-pi install-pi-units enable-pi-units restart-pi stop-pi start-pi logs-pi status-pi ssh-pi \
+        install-nano-units enable-nano-units restart-nano stop-nano start-nano logs-nano status-nano
 
 help:
 	@echo "Targets:"
 	@echo "  deploy-pi          rsync pi/ and common/ to the Pi, then restart services"
 	@echo "  install-pi-units   copy systemd unit files to the Pi and daemon-reload"
 	@echo "  enable-pi-units    enable all Pi services to start on boot"
-	@echo "  restart-pi         systemctl --user restart \$(PI_SERVICES) on Pi"
+	@echo "  restart-pi         systemctl --user restart [$(PI_SERVICES)] on Pi"
 	@echo "  stop-pi            stop Pi services"
 	@echo "  start-pi           start Pi services"
 	@echo "  logs-pi            journalctl -f for all Pi services"
 	@echo "  status-pi          systemctl --user status for each Pi service"
 	@echo "  ssh-pi             interactive SSH to the Pi"
+	@echo ""
+	@echo "Nano (run on the Nano itself):"
+	@echo "  install-nano-units copy systemd unit files into ~/.config/systemd/user and reload"
+	@echo "  enable-nano-units  enable Nano services to start on boot"
+	@echo "  restart-nano       systemctl --user restart [$(NANO_SERVICES)]"
+	@echo "  stop-nano          stop Nano services"
+	@echo "  start-nano         start Nano services"
+	@echo "  logs-nano          journalctl -f for all Nano services"
+	@echo "  status-nano        systemctl --user status for each Nano service"
 	@echo ""
 	@echo "Override with e.g.  make deploy-pi PI_HOST=192.168.1.42"
 
@@ -62,3 +76,29 @@ status-pi:
 
 ssh-pi:
 	ssh $(SSH_OPTS) $(PI_USER)@$(PI_HOST)
+
+# --- Nano targets (run locally on the Nano; no SSH) ---
+
+install-nano-units:
+	mkdir -p $(NANO_USER_UNIT_DIR)
+	cp $(REPO_ROOT)/nano/systemd/*.service $(NANO_USER_UNIT_DIR)/
+	systemctl --user daemon-reload
+
+enable-nano-units:
+	systemctl --user enable $(NANO_SERVICES)
+	loginctl enable-linger $(USER) || true
+
+restart-nano:
+	systemctl --user restart $(NANO_SERVICES)
+
+stop-nano:
+	systemctl --user stop $(NANO_SERVICES)
+
+start-nano:
+	systemctl --user start $(NANO_SERVICES)
+
+logs-nano:
+	journalctl -f $(foreach s,$(NANO_SERVICES),--user-unit=$(s))
+
+status-nano:
+	@for s in $(NANO_SERVICES); do systemctl --user status $$s --no-pager -n 5 || true; echo; done
