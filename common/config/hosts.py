@@ -12,6 +12,10 @@ MQTT_HOST = NANO_HOST
 MQTT_PORT = 1883
 MQTT_KEEPALIVE_S = 30
 
+# --- MQTT auth. Broker requires creds; every client loads the password from this file. ---
+MQTT_USERNAME = "turret"
+MQTT_PASSWORD_FILE = "/etc/turret/mqtt.password"
+
 # --- RTSP published by the Pi's camera-pipeline ---
 RTSP_PORT = 8554
 RTSP_PATH = "/live"
@@ -37,3 +41,6 @@ PIR_INACTIVE_AFTER_S = 2.0
 # --- Recording (Nano) ---
 TRAILING_SECONDS = 10
 CLIPS_DIR = "/var/lib/turret/clips"
+
+# --- Hub telemetry cadence (seconds between turret/nano/telemetry publishes) ---
+TELEMETRY_PERIOD_S = 5

@@ -1,0 +1,11 @@
+# MediaMTX config for SonOfPAWD.
+# Bridges the Pi's RTSP feed (rtsp://<pi>:8554/live) to WebRTC (WHEP) for the
+# browser-based UI. Defaults elsewhere are fine; keep this file minimal.
+
+# Let MediaMTX choose the best RTSP transport; the Pi publishes over TCP but
+# negotiation works either way.
+
+paths:
+  live:
+    source: rtsp://testcam-64bit.local:8554/live
+    # sourceOnDemand: no  # (default) keep the pull warm so first-frame is fast

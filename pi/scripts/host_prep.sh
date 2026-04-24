@@ -19,6 +19,30 @@ sudo apt install -y \
     chrony \
     avahi-daemon
 
+echo "== check MQTT password file =="
+if [ ! -s /etc/turret/mqtt.password ]; then
+    cat <<EOF
+/etc/turret/mqtt.password is MISSING on this host. Services cannot authenticate.
+
+After running host_prep.sh on the Nano, copy the file here. From the Nano run:
+
+    scp /etc/turret/mqtt.password ${USER}@$(hostname):/tmp/mqtt.password
+
+Then on this Pi:
+
+    sudo mkdir -p /etc/turret
+    sudo mv /tmp/mqtt.password /etc/turret/mqtt.password
+    sudo chmod 644 /etc/turret/mqtt.password
+
+Then re-run this script.
+EOF
+    exit 1
+fi
+PW_SHA=$(sudo sha256sum /etc/turret/mqtt.password | awk '{print $1}')
+echo "  /etc/turret/mqtt.password OK"
+echo "  password sha256: $PW_SHA"
+echo "  (must match the sha256 printed by the Nano's host_prep.sh)"
+
 echo "== enable lingering so user units run without login =="
 sudo loginctl enable-linger "$USER"
 
@@ -31,9 +55,15 @@ else
 fi
 
 echo "== quick smoke test (2s capture to /dev/null) =="
-rpicam-vid -t 2000 -n --inline --codec h264 -o /dev/null >/dev/null 2>&1 \
-    && echo "  rpicam-vid smoke test: OK" \
-    || { echo "  rpicam-vid smoke test FAILED"; exit 1; }
+if rpicam-vid -t 2000 -n --inline --codec h264 -o /dev/null >/dev/null 2>/tmp/rpicam-smoke.err; then
+    echo "  rpicam-vid smoke test: OK"
+else
+    echo "  rpicam-vid smoke test FAILED. Error output:"
+    sed 's/^/    /' /tmp/rpicam-smoke.err
+    echo "  If the camera is in use by the service, stop it first and re-run:"
+    echo "    systemctl --user stop camera-pipeline"
+    exit 1
+fi
 
 echo "== verify gst-rtsp-server python bindings =="
 python3 -c "import gi; gi.require_version('GstRtspServer','1.0'); from gi.repository import GstRtspServer" \

@@ -17,7 +17,13 @@ from typing import Callable, Dict, List, Optional
 
 import paho.mqtt.client as mqtt
 
-from common.config.hosts import MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_S
+from common.config.hosts import (
+    MQTT_HOST,
+    MQTT_PORT,
+    MQTT_KEEPALIVE_S,
+    MQTT_USERNAME,
+    MQTT_PASSWORD_FILE,
+)
 from common.messaging.topics import topic_health
 
 log = logging.getLogger(__name__)
@@ -25,11 +31,31 @@ log = logging.getLogger(__name__)
 Handler = Callable[[str, dict], None]
 
 
+def _read_mqtt_password() -> str:
+    try:
+        with open(MQTT_PASSWORD_FILE) as f:
+            pw = f.read().strip()
+    except FileNotFoundError:
+        raise RuntimeError(
+            f"MQTT password file missing at {MQTT_PASSWORD_FILE}. "
+            f"Run nano/scripts/host_prep.sh on the Nano, then scp the file to this host."
+        )
+    if not pw:
+        raise RuntimeError(f"MQTT password file {MQTT_PASSWORD_FILE} is empty.")
+    return pw
+
+
 class MqttClient:
-    def __init__(self, service_name: str, host_tag: Optional[str] = None):
+    def __init__(
+        self,
+        service_name: str,
+        host_tag: Optional[str] = None,
+        on_connected: Optional[Callable[[], None]] = None,
+    ):
         self.service_name = service_name
         self.host_tag = host_tag or self._detect_host_tag()
         self.health_topic = topic_health(self.host_tag)
+        self._on_connected_cb = on_connected
 
         self._client = mqtt.Client(
             client_id=f"{self.host_tag}-{service_name}-{int(time.time())}"
@@ -49,6 +75,7 @@ class MqttClient:
         return "nano"
 
     def connect(self, host: str = MQTT_HOST, port: int = MQTT_PORT) -> None:
+        self._client.username_pw_set(MQTT_USERNAME, _read_mqtt_password())
         down = json.dumps({
             "ts": int(time.time() * 1000),
             "service": self.service_name,
@@ -66,10 +93,10 @@ class MqttClient:
         self._client.loop_stop()
         self._client.disconnect()
 
-    def publish(self, topic: str, payload: dict) -> None:
+    def publish(self, topic: str, payload: dict, retain: bool = False) -> None:
         if "ts" not in payload:
             payload["ts"] = int(time.time() * 1000)
-        self._client.publish(topic, json.dumps(payload), qos=1)
+        self._client.publish(topic, json.dumps(payload), qos=1, retain=retain)
 
     def subscribe(self, topic: str, handler: Handler) -> None:
         self._handlers[topic] = handler
@@ -88,6 +115,11 @@ class MqttClient:
         })
         for topic in self._subs:
             client.subscribe(topic, qos=1)
+        if self._on_connected_cb is not None:
+            try:
+                self._on_connected_cb()
+            except Exception:
+                log.exception("on_connected callback failed")
 
     def _on_disconnect(self, client, userdata, rc):
         if rc != 0:

@@ -38,10 +38,48 @@ done
 echo "== enable mosquitto =="
 sudo systemctl enable --now mosquitto
 
+echo "== mosquitto auth =="
+sudo mkdir -p /etc/turret
+if [ ! -s /etc/turret/mqtt.password ]; then
+    echo "  generating new MQTT password at /etc/turret/mqtt.password"
+    PW=$(openssl rand -hex 24)
+    echo -n "$PW" | sudo tee /etc/turret/mqtt.password >/dev/null
+    sudo chmod 644 /etc/turret/mqtt.password
+else
+    echo "  /etc/turret/mqtt.password exists, reusing"
+    PW=$(sudo cat /etc/turret/mqtt.password)
+fi
+# Mosquitto 1.4 (default on L4T 32 / Ubuntu 18.04) does not accept -c and -b together.
+# Reset the password file first, then add the user in batch mode.
+echo -n | sudo tee /etc/mosquitto/passwd >/dev/null
+sudo chown mosquitto:mosquitto /etc/mosquitto/passwd
+sudo chmod 600 /etc/mosquitto/passwd
+sudo mosquitto_passwd -b /etc/mosquitto/passwd turret "$PW"
+sudo tee /etc/mosquitto/conf.d/turret.conf >/dev/null <<EOF
+allow_anonymous false
+password_file /etc/mosquitto/passwd
+EOF
+sudo systemctl restart mosquitto
+sleep 1
+if ! systemctl is-active --quiet mosquitto; then
+    echo "  mosquitto failed to start after applying auth config."
+    echo "  Recent log:"
+    sudo journalctl -u mosquitto --no-pager -n 30
+    exit 1
+fi
+PW_SHA=$(echo -n "$PW" | sha256sum | awk '{print $1}')
+echo "  password sha256: $PW_SHA"
+echo "  (scp /etc/turret/mqtt.password to each Pi and confirm this sha256 matches)"
+
 echo "== smoke test mosquitto =="
-mosquitto_pub -h localhost -t turret/test/prep -m '{"ts":0,"ok":true}' \
-    && echo "  mosquitto pub: OK" \
+mosquitto_pub -h localhost -u turret -P "$PW" -t turret/test/prep -m '{"ts":0,"ok":true}' \
+    && echo "  mosquitto pub (with auth): OK" \
     || { echo "  mosquitto pub FAILED"; exit 1; }
+if mosquitto_pub -h localhost -t turret/test/prep -m '{"ts":0,"ok":true}' >/dev/null 2>&1; then
+    echo "  anonymous pub UNEXPECTEDLY SUCCEEDED -- auth is not enforced"; exit 1
+else
+    echo "  anonymous pub correctly rejected"
+fi
 
 echo "== enable lingering for user systemd units =="
 sudo loginctl enable-linger "$USER"
