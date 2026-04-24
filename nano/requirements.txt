@@ -2,3 +2,12 @@
 #   sudo apt install python3-paho-mqtt python3-gi python3-gst-1.0
 # Listed here for venv-based dev setups.
 -r ../common/requirements.txt
+
+# UI backend (Flask + Socket.IO). Python 3.6 on L4T 32 constrains the pins;
+# install with:
+#   pip3 install --user -r nano/requirements.txt
+Flask>=1.1,<2.1
+Flask-SocketIO>=5.1,<5.4
+python-socketio>=5.5,<5.8
+python-engineio>=4.3,<4.5
+simple-websocket>=0.5,<1.1   # optional; enables WS transport in threading mode

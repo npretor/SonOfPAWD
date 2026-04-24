@@ -5,6 +5,12 @@
 # Let MediaMTX choose the best RTSP transport; the Pi publishes over TCP but
 # negotiation works either way.
 
+# WebRTC ICE: advertise only the LAN interface. Auto-discovery was picking up
+# docker0 (172.17.0.1) and handing that to the browser, which obviously
+# couldn't route to it — ICE would fail and you'd get a black screen.
+webrtcIPsFromInterfaces: yes
+webrtcIPsFromInterfacesList: [wlan0]
+
 paths:
   live:
     source: rtsp://testcam-64bit.local:8554/live

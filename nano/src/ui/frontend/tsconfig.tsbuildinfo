@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/socket.ts","./src/store.ts","./src/components/ServiceHealth.tsx","./src/components/Sidebar.tsx","./src/components/TelemetryPanel.tsx","./src/components/TurretAngle.tsx","./src/hooks/useHubState.ts","./src/routes/Dashboard.tsx","./src/routes/Settings.tsx"],"errors":true,"version":"5.9.3"}

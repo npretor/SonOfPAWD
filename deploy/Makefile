@@ -8,15 +8,18 @@ PI_DEST   ?= /home/$(PI_USER)/SonOfPAWD
 SSH_OPTS  ?= -o StrictHostKeyChecking=accept-new
 
 PI_SERVICES   := camera-pipeline sensor-wakeup ir-led
-NANO_SERVICES := recorder hub
+NANO_SERVICES := recorder hub ui-backend
 
 NANO_USER_UNIT_DIR := $(HOME)/.config/systemd/user
 
 RSYNC_FLAGS := -avz --delete --exclude-from=$(REPO_ROOT)/deploy/rsync-exclude.txt
 
+UI_DIR := $(REPO_ROOT)/nano/src/ui/frontend
+
 .PHONY: help \
         deploy-pi install-pi-units enable-pi-units restart-pi stop-pi start-pi logs-pi status-pi ssh-pi \
-        install-nano-units enable-nano-units restart-nano stop-nano start-nano logs-nano status-nano
+        install-nano-units enable-nano-units restart-nano stop-nano start-nano logs-nano status-nano \
+        ui-install ui-build ui-dev
 
 help:
 	@echo "Targets:"
@@ -102,3 +105,14 @@ logs-nano:
 
 status-nano:
 	@for s in $(NANO_SERVICES); do systemctl --user status $$s --no-pager -n 5 || true; echo; done
+
+# --- UI targets (run on the Nano or a dev box with Node 18+) ---
+
+ui-install:
+	cd $(UI_DIR) && npm install
+
+ui-build:
+	cd $(UI_DIR) && npm run build
+
+ui-dev:
+	cd $(UI_DIR) && npm run dev
