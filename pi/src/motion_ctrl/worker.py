@@ -69,6 +69,17 @@ class Worker:
             self._desired_enabled = enabled
             log.info("enable -> %s", enabled)
 
+    def set_calibration(self, cal: Calibration) -> None:
+        """Hot-swap calibration. Slew limiter still applies, so any sudden
+        change in the us mapping is bounded to max_slew_us_per_tick per axis.
+        """
+        with self._lock:
+            self.cal = cal
+        log.info(
+            "calibration updated: pan=%s tilt=%s slew=%dus/tick",
+            cal.pan, cal.tilt, cal.max_slew_us_per_tick,
+        )
+
     def set_aim(self, pan: float, tilt: float) -> None:
         # Clamp defensively; UI and hub already do this but the worker is
         # the last line.

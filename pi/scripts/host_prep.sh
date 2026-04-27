@@ -46,6 +46,11 @@ echo "  (must match the sha256 printed by the Nano's host_prep.sh)"
 echo "== enable lingering so user units run without login =="
 sudo loginctl enable-linger "$USER"
 
+echo "== /var/lib/turret writable by $USER (motion-ctrl calibration) =="
+sudo mkdir -p /var/lib/turret
+sudo chown "$USER":"$USER" /var/lib/turret
+echo "  $(ls -ld /var/lib/turret)"
+
 echo "== verify rpicam-vid (our encoder path) =="
 if command -v rpicam-vid >/dev/null 2>&1; then
     echo "  rpicam-vid: $(command -v rpicam-vid)"

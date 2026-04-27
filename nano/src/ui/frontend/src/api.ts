@@ -68,3 +68,27 @@ export const getLogs = (service: string, lines = 200) =>
 
 export const listLogServices = () =>
   getJson<{ services: string[] }>("/api/logs");
+
+export interface AxisCalPayload {
+  min_us: number;
+  max_us: number;
+  center_us: number;
+  invert: boolean;
+}
+
+export interface CalibrationPayload {
+  pan: AxisCalPayload;
+  tilt: AxisCalPayload;
+  max_slew_us_per_tick: number;
+}
+
+export interface CalibrationGetResponse {
+  calibration: Partial<CalibrationPayload> & { ts?: number };
+  present: boolean;
+}
+
+export const getCalibration = () =>
+  getJson<CalibrationGetResponse>("/api/motion-ctrl/calibration");
+
+export const putCalibration = (c: CalibrationPayload) =>
+  putJson<CalibrationPayload>("/api/motion-ctrl/calibration", c);

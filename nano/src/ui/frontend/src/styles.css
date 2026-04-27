@@ -193,6 +193,12 @@ a:hover { text-decoration: underline; }
   font-size: 0.85rem;
 }
 
+.box-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 .overlay-badges {
   position: absolute;
   top: 0.5rem;
@@ -388,6 +394,33 @@ a:hover { text-decoration: underline; }
   gap: 0.75rem;
   padding-top: 0.5rem;
 }
+.settings-section {
+  margin: 1.5rem 0 0.25rem 0;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+.settings-hint { font-size: 0.8rem; margin: 0 0 0.75rem 0; }
+
+.cal-axis {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.75rem 0.6rem 0.75rem;
+  background: var(--bg-elev);
+}
+.cal-axis h4 {
+  margin: 0.2rem 0 0.4rem 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-muted);
+}
+.cal-axis .settings-row { padding: 0.3rem 0; }
+.cal-axis .settings-row:last-of-type { border-bottom: none; }
+
 .settings-status { font-size: 0.85rem; color: var(--fg-muted); }
 .settings-status.saved { color: var(--up); }
 .settings-status.error { color: var(--down); }

@@ -26,7 +26,9 @@ from common.messaging.topics import (
     TOPIC_HEALTH_ALL,
     TOPIC_HUB_CONFIG,
     TOPIC_HUB_STATE,
+    TOPIC_INFER_DETECT,
     TOPIC_MODE_CURRENT,
+    TOPIC_MOTION_CTRL_CALIBRATION,
     TOPIC_MOTION_CTRL_ENABLE,
     TOPIC_MOTION_CTRL_STATE,
     TOPIC_RECORDER_EVENT,
@@ -34,6 +36,22 @@ from common.messaging.topics import (
 )
 
 log = logging.getLogger("ui.bridge")
+
+
+def _normalize_detections(payload: dict) -> dict:
+    """Coerce detection payloads to {detections: [{class, score, bbox}], ts}.
+
+    Accepts both the canonical multi-detection shape and the single-detection
+    shape ({"class","score","bbox"}) that hand-published synthetic test
+    payloads use. Anything else passes through unchanged so the UI can choose
+    to ignore it.
+    """
+    if "detections" in payload and isinstance(payload["detections"], list):
+        return payload
+    if "bbox" in payload and "class" in payload:
+        det = {k: payload[k] for k in ("class", "score", "bbox") if k in payload}
+        return {"detections": [det], "ts": payload.get("ts")}
+    return payload
 
 
 # topic -> socket.io event name (exact-match topics)
@@ -48,6 +66,8 @@ _TOPIC_TO_EVENT: Dict[str, str] = {
     TOPIC_FIRE_EVENT:          "fire_event",
     TOPIC_MOTION_CTRL_ENABLE:  "motion_enable",
     TOPIC_MOTION_CTRL_STATE:   "aim_state",
+    TOPIC_MOTION_CTRL_CALIBRATION: "motion_calibration",
+    TOPIC_INFER_DETECT:        "detection",
 }
 
 # wildcard filter -> event name
@@ -64,6 +84,7 @@ _REPLAY_TOPICS: Set[str] = {
     TOPIC_FIRE_ENABLE,
     TOPIC_FIRE_ARMED,
     TOPIC_MOTION_CTRL_ENABLE,
+    TOPIC_MOTION_CTRL_CALIBRATION,
 }
 
 
@@ -109,6 +130,8 @@ class MqttBridge:
         event = _TOPIC_TO_EVENT.get(topic)
         if event is None:
             return
+        if topic == TOPIC_INFER_DETECT:
+            payload = _normalize_detections(payload)
         with self._cache_lock:
             self._latest[topic] = payload
             if topic in _REPLAY_TOPICS:

@@ -46,6 +46,31 @@ export interface MotionEnable {
   ts: number;
 }
 
+export interface Detection {
+  class: string;
+  score: number;
+  bbox: [number, number, number, number]; // [x0, y0, x1, y1] normalized [0,1]
+}
+
+export interface DetectionsPayload {
+  detections: Detection[];
+  ts: number;
+}
+
+export interface AxisCalibration {
+  min_us: number;
+  max_us: number;
+  center_us: number;
+  invert: boolean;
+}
+
+export interface MotionCalibration {
+  pan: AxisCalibration;
+  tilt: AxisCalibration;
+  max_slew_us_per_tick: number;
+  ts?: number;
+}
+
 export interface HubConfig {
   motion_timeout_s: number;
   trailing_s: number;
@@ -64,6 +89,8 @@ interface UIStore {
   fireEnable: FireFlag | null;
   aim: AimState | null;
   motionEnable: MotionEnable | null;
+  motionCalibration: MotionCalibration | null;
+  detections: DetectionsPayload | null;
   hubConfig: HubConfig | null;
   scheme: ControlScheme;
   setConnected: (v: boolean) => void;
@@ -74,6 +101,8 @@ interface UIStore {
   setFireEnable: (v: FireFlag) => void;
   setAim: (v: AimState) => void;
   setMotionEnable: (v: MotionEnable) => void;
+  setMotionCalibration: (v: MotionCalibration) => void;
+  setDetections: (v: DetectionsPayload) => void;
   setHubConfig: (v: HubConfig) => void;
   setScheme: (s: ControlScheme) => void;
 }
@@ -94,6 +123,8 @@ export const useUIStore = create<UIStore>((set) => ({
   fireEnable: null,
   aim: null,
   motionEnable: null,
+  motionCalibration: null,
+  detections: null,
   hubConfig: null,
   scheme: loadScheme(),
   setConnected: (v) => set({ connected: v }),
@@ -104,6 +135,8 @@ export const useUIStore = create<UIStore>((set) => ({
   setFireEnable: (v) => set({ fireEnable: v }),
   setAim: (v) => set({ aim: v }),
   setMotionEnable: (v) => set({ motionEnable: v }),
+  setMotionCalibration: (v) => set({ motionCalibration: v }),
+  setDetections: (v) => set({ detections: v }),
   setHubConfig: (v) => set({ hubConfig: v }),
   setScheme: (s) => {
     localStorage.setItem(SCHEME_KEY, s);

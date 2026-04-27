@@ -24,11 +24,12 @@ from common.config.hosts import (
 from common.messaging.client import MqttClient
 from common.messaging.topics import (
     TOPIC_MOTION_CTRL_AIM,
+    TOPIC_MOTION_CTRL_CALIBRATION,
     TOPIC_MOTION_CTRL_ENABLE,
     TOPIC_MOTION_CTRL_STATE,
 )
 
-from pi.src.motion_ctrl.calibration import DEFAULT
+from pi.src.motion_ctrl import calibration as cal_mod
 from pi.src.motion_ctrl.servo_link import ServoLink
 from pi.src.motion_ctrl.worker import Worker
 
@@ -37,7 +38,8 @@ log = logging.getLogger("motion-ctrl")
 
 
 def main() -> int:
-    cal = DEFAULT
+    cal = cal_mod.load()
+    log.info("calibration loaded from %s", cal_mod.CALIBRATION_PATH)
     link = ServoLink(SERVO_SERIAL_DEV, SERVO_SERIAL_BAUD)
     # initial_value=False is the safety contract — servos must never come up
     # energized into an unknown commanded position.
@@ -70,9 +72,22 @@ def main() -> int:
             return
         worker.set_aim(pan, tilt)
 
+    def on_calibration(_topic: str, payload: dict) -> None:
+        try:
+            new_cal = cal_mod.from_dict(payload, base=worker.cal)
+        except ValueError as e:
+            log.warning("rejected calibration payload: %s", e)
+            return
+        try:
+            cal_mod.save(new_cal)
+        except OSError as e:
+            log.warning("calibration save failed (%s); applying in-memory anyway", e)
+        worker.set_calibration(new_cal)
+
     mqtt.connect()
     mqtt.subscribe(TOPIC_MOTION_CTRL_ENABLE, on_enable)
     mqtt.subscribe(TOPIC_MOTION_CTRL_AIM, on_aim)
+    mqtt.subscribe(TOPIC_MOTION_CTRL_CALIBRATION, on_calibration)
 
     stop = threading.Event()
     signal.signal(signal.SIGINT, lambda *_: stop.set())

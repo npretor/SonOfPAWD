@@ -4,9 +4,11 @@ import { socket } from "../socket";
 import {
   AimState,
   FireFlag,
+  DetectionsPayload,
   HubConfig,
   HubState,
   ModeCurrent,
+  MotionCalibration,
   MotionEnable,
   Telemetry,
   useUIStore,
@@ -26,6 +28,8 @@ export function useSocketBinding() {
     const onEnable = (p: FireFlag) => s.setFireEnable(p);
     const onAim = (p: AimState) => s.setAim(p);
     const onMotionEnable = (p: MotionEnable) => s.setMotionEnable(p);
+    const onMotionCal = (p: MotionCalibration) => s.setMotionCalibration(p);
+    const onDetections = (p: DetectionsPayload) => s.setDetections(p);
     const onConfig = (p: HubConfig) => s.setHubConfig(p);
 
     socket.on("connect", onConnect);
@@ -37,6 +41,8 @@ export function useSocketBinding() {
     socket.on("fire_enable", onEnable);
     socket.on("aim_state", onAim);
     socket.on("motion_enable", onMotionEnable);
+    socket.on("motion_calibration", onMotionCal);
+    socket.on("detection", onDetections);
     socket.on("hub_config", onConfig);
 
     if (socket.connected) s.setConnected(true);
@@ -51,6 +57,8 @@ export function useSocketBinding() {
       socket.off("fire_enable", onEnable);
       socket.off("aim_state", onAim);
       socket.off("motion_enable", onMotionEnable);
+      socket.off("motion_calibration", onMotionCal);
+      socket.off("detection", onDetections);
       socket.off("hub_config", onConfig);
     };
   }, []);

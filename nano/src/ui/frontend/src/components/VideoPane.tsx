@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import BoxOverlay from "./BoxOverlay";
 import OverlayBadges from "./OverlayBadges";
 import { WhepSession, WhepState, whepStart } from "../whep";
 
@@ -109,6 +110,7 @@ export default function VideoPane() {
           muted
           controls={false}
         />
+        {playing && <BoxOverlay videoRef={videoRef} />}
         {playing && <OverlayBadges resolution={resolution} fps={fps} />}
         {playing && stats && (
           <div className="whep-stats">

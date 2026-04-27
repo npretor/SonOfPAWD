@@ -15,8 +15,50 @@ from common.messaging.topics import (
     TOPIC_HUB_CONFIG,
     TOPIC_MODE_SET,
     TOPIC_MOTION_CTRL_AIM,
+    TOPIC_MOTION_CTRL_CALIBRATION,
     TOPIC_MOTION_CTRL_ENABLE,
 )
+
+# Bounds mirror pi/src/motion_ctrl/calibration.py so we can reject bad PUTs
+# without round-tripping to the Pi (which may be offline).
+_US_ABS_MIN = 500
+_US_ABS_MAX = 2500
+_SLEW_MIN = 1
+_SLEW_MAX = 500
+
+
+def _validate_axis(d, name):
+    if not isinstance(d, dict):
+        raise ValueError(f"{name}: expected object")
+    try:
+        lo = int(d["min_us"]); hi = int(d["max_us"]); ce = int(d["center_us"])
+    except (KeyError, TypeError, ValueError):
+        raise ValueError(f"{name}: missing/invalid min_us/max_us/center_us")
+    if not (_US_ABS_MIN <= lo < ce < hi <= _US_ABS_MAX):
+        raise ValueError(
+            f"{name}: require {_US_ABS_MIN} <= min_us < center_us < max_us <= {_US_ABS_MAX}"
+        )
+    return {"min_us": lo, "max_us": hi, "center_us": ce, "invert": bool(d.get("invert", False))}
+
+
+def _validate_calibration(payload):
+    if not isinstance(payload, dict):
+        raise ValueError("body must be an object")
+    if "pan" not in payload or "tilt" not in payload:
+        raise ValueError("missing pan or tilt")
+    pan = _validate_axis(payload["pan"], "pan")
+    tilt = _validate_axis(payload["tilt"], "tilt")
+    try:
+        slew_us = int(payload.get("max_slew_us_per_tick", 40))
+    except (TypeError, ValueError):
+        raise ValueError("max_slew_us_per_tick: not an int")
+    if not (_SLEW_MIN <= slew_us <= _SLEW_MAX):
+        raise ValueError(f"max_slew_us_per_tick: require {_SLEW_MIN}..{_SLEW_MAX}")
+    return {
+        "pan": pan,
+        "tilt": tilt,
+        "max_slew_us_per_tick": slew_us,
+    }
 
 from nano.src.hub.modes import VALID_MODES
 from nano.src.ui.backend import logs as logs_mod
@@ -72,6 +114,24 @@ def register_routes(app: Flask, bridge: MqttBridge) -> None:
         bridge.publish(TOPIC_FIRE_REQUEST, {"source": "ui"})
         log.info("published fire/request (armed=%s auto=%s)", armed, auto_enabled)
         return jsonify({"ok": True})
+
+    @app.get("/api/motion-ctrl/calibration")
+    def get_calibration():
+        cal = bridge.get_latest(TOPIC_MOTION_CTRL_CALIBRATION)
+        # Empty dict = motion-ctrl hasn't published yet. Tell the UI so it
+        # can render its own defaults rather than guessing.
+        return jsonify({"calibration": cal, "present": bool(cal)})
+
+    @app.put("/api/motion-ctrl/calibration")
+    def put_calibration():
+        body = request.get_json(silent=True) or {}
+        try:
+            normalized = _validate_calibration(body)
+        except ValueError as e:
+            return jsonify({"error": "invalid_calibration", "message": str(e)}), 400
+        bridge.publish(TOPIC_MOTION_CTRL_CALIBRATION, normalized, retain=True)
+        log.info("published motion_ctrl/calibration -> %s", normalized)
+        return jsonify(normalized)
 
     @app.post("/api/motion-ctrl/enable")
     def set_motion_enable():

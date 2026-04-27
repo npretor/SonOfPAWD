@@ -24,10 +24,12 @@ from common.messaging.topics import (
     TOPIC_HUB_CONFIG,
     TOPIC_HUB_STATE,
     TOPIC_FIRE_ENABLE,
+    TOPIC_INFER_DETECT,
     TOPIC_INFER_ENABLE,
     TOPIC_MODE_CURRENT,
     TOPIC_MODE_SET,
     TOPIC_MOTION,
+    TOPIC_MOTION_CTRL_AIM,
     TOPIC_MOTION_CTRL_ENABLE,
     TOPIC_RECORDER_EVENT,
     TOPIC_TELEMETRY,
@@ -37,6 +39,10 @@ from common.messaging.topics import (
 # (nano/src/ui/backend/settings.py); defined here so the hub can fall back
 # without importing UI code.
 _VALID_TARGET_CLASSES = {"cat", "raccoon", "rat", "deer"}
+
+# Modes in which the hub drives the actuator + inference pipeline.
+_AUTO_MODES = {"auto-aim", "auto-sentry"}
+DETECTION_SCORE_MIN = 0.5
 
 from nano.src.hub.alerts import alert_user
 from nano.src.hub.modes import Mode
@@ -86,6 +92,9 @@ class Hub:
     def _on_hub_config(self, _topic, payload):
         GLib.idle_add(self._handle_hub_config, payload)
 
+    def _on_detection(self, _topic, payload):
+        GLib.idle_add(self._handle_detection, payload)
+
     # ----- GLib-thread handlers -----------------------------------------
 
     def _handle_mode_set(self, payload):
@@ -99,12 +108,22 @@ class Hub:
             return False
         old = self.state.mode
         self.state.mode = new_mode
-        # Step B: only idle is fully wired. Non-idle modes still accept the
-        # transition and republish state; their motion handling lands later.
         log.info("mode: %s -> %s", old.value, new_mode.value)
+        self._apply_mode_side_effects(old, new_mode)
         self.mqtt.publish(TOPIC_MODE_CURRENT, {"mode": new_mode.value}, retain=True)
         self._publish_hub_state()
         return False
+
+    def _apply_mode_side_effects(self, old: Mode, new: Mode) -> None:
+        """Toggle motion_ctrl + inference enable when entering/leaving auto modes."""
+        was_auto = old.value in _AUTO_MODES
+        is_auto = new.value in _AUTO_MODES
+        if was_auto == is_auto:
+            return
+        self.mqtt.publish(TOPIC_MOTION_CTRL_ENABLE, {"enabled": is_auto}, retain=True)
+        self.mqtt.publish(TOPIC_INFER_ENABLE, {"enabled": is_auto}, retain=True)
+        log.info("auto-mode side effects: motion_ctrl/enable=%s inference/enable=%s",
+                 is_auto, is_auto)
 
     def _handle_motion(self, payload):
         active = bool(payload.get("active", False))
@@ -183,6 +202,52 @@ class Hub:
             log.info("hub_config: %s -> %s (no echo)", before, effective)
         return False
 
+    def _handle_detection(self, payload):
+        if self.state.mode.value not in _AUTO_MODES:
+            return False
+        # Canonical contract: {"detections": [...], "ts": ...}. Single-shape
+        # ({"class","score","bbox"}) is also accepted so synthetic test
+        # publishes still work.
+        if isinstance(payload.get("detections"), list):
+            dets = payload["detections"]
+        elif "bbox" in payload and "class" in payload:
+            dets = [payload]
+        else:
+            return False
+
+        best = None  # (score, cx, cy)
+        for d in dets:
+            if not isinstance(d, dict):
+                continue
+            if d.get("class") != self.state.target_class:
+                continue
+            try:
+                score = float(d.get("score", 0.0))
+            except (TypeError, ValueError):
+                continue
+            if score < DETECTION_SCORE_MIN:
+                continue
+            bbox = d.get("bbox")
+            if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                continue
+            try:
+                x0, y0, x1, y1 = (float(v) for v in bbox)
+            except (TypeError, ValueError):
+                continue
+            cx = (x0 + x1) / 2.0
+            cy = (y0 + y1) / 2.0
+            if best is None or score > best[0]:
+                best = (score, cx, cy)
+
+        if best is None:
+            return False
+        _, cx, cy = best
+        # +pan = right, +tilt = up; image y grows downward.
+        pan = max(-1.0, min(1.0, 2.0 * cx - 1.0))
+        tilt = max(-1.0, min(1.0, 1.0 - 2.0 * cy))
+        self.mqtt.publish(TOPIC_MOTION_CTRL_AIM, {"pan": pan, "tilt": tilt})
+        return False
+
     def _bootstrap_hub_config(self):
         if not self._seen_hub_config:
             log.info("no retained hub_config seen; publishing defaults: %s",
@@ -220,6 +285,7 @@ class Hub:
         self.mqtt.subscribe(TOPIC_HEALTH_ALL, self._on_health)
         self.mqtt.subscribe(TOPIC_RECORDER_EVENT, self._on_recorder_event)
         self.mqtt.subscribe(TOPIC_HUB_CONFIG, self._on_hub_config)
+        self.mqtt.subscribe(TOPIC_INFER_DETECT, self._on_detection)
 
         GLib.timeout_add_seconds(TELEMETRY_PERIOD_S, self._tick_telemetry)
         # Give the broker ~500ms to deliver a retained TOPIC_HUB_CONFIG (if any)
