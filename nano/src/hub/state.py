@@ -14,6 +14,11 @@ from nano.src.hub.modes import Mode
 class HubState:
     mode: Mode = Mode.IDLE
     target_class: str = "cat"  # cat | raccoon | rat | deer; garden pest turret
+    # System config the UI controls via turret/hub/config (retained). Defaults
+    # match nano/src/ui/backend/settings.py DEFAULTS so a fresh broker sees the
+    # same values as a fresh ui_settings.json.
+    motion_timeout_s: int = 2
+    trailing_s: int = 10
     recorder_armed: bool = False
     last_motion_ts: float = 0.0
     # "host/service" -> "up" | "down"

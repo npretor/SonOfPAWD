@@ -34,6 +34,16 @@ CAMERA_BITRATE = 6_000_000  # 6 Mbps H.264
 # --- Pi GPIO (BCM numbering). Update to match actual wiring. ---
 PIR_PIN = 17
 IR_LED_PIN = 27
+# Servo PSU enable (motor_control_plan.md §3). Active high; gates the
+# dedicated servo supply via MOSFET. Must be low at boot so servos are
+# never energized into an unknown commanded position.
+SERVO_POWER_PIN = 24
+
+# --- Servo controller (Arduino over USB, on the Pi). ---
+# Stable path is provided by pi/scripts/udev/99-turret-arduino.rules. Falls
+# back to /dev/ttyACM0 in dev if the rule isn't installed.
+SERVO_SERIAL_DEV = "/dev/turret-arduino"
+SERVO_SERIAL_BAUD = 115200
 
 # --- Motion debounce on the Pi ---
 PIR_INACTIVE_AFTER_S = 2.0

@@ -21,6 +21,7 @@ from common.config.hosts import TELEMETRY_PERIOD_S
 from common.messaging.client import MqttClient
 from common.messaging.topics import (
     TOPIC_HEALTH_ALL,
+    TOPIC_HUB_CONFIG,
     TOPIC_HUB_STATE,
     TOPIC_FIRE_ENABLE,
     TOPIC_INFER_ENABLE,
@@ -31,6 +32,11 @@ from common.messaging.topics import (
     TOPIC_RECORDER_EVENT,
     TOPIC_TELEMETRY,
 )
+
+# Valid target classes for hub/config validation. Mirrors the UI whitelist
+# (nano/src/ui/backend/settings.py); defined here so the hub can fall back
+# without importing UI code.
+_VALID_TARGET_CLASSES = {"cat", "raccoon", "rat", "deer"}
 
 from nano.src.hub.alerts import alert_user
 from nano.src.hub.modes import Mode
@@ -47,6 +53,10 @@ class Hub:
         self.telemetry = TelemetryReader()
         self.loop = GLib.MainLoop()
         self.mqtt = MqttClient(service_name="hub", on_connected=self._on_connected)
+        # (Removed: aim->state stub echo. Owned by pi/src/motion_ctrl now.)
+        # Hub-config bootstrap: only publish defaults if no retained value
+        # already exists on the broker. Set when the first hub_config arrives.
+        self._seen_hub_config = False
 
     # ----- post-connect: publish retained bootstrap state ----------------
 
@@ -72,6 +82,9 @@ class Hub:
 
     def _on_recorder_event(self, _topic, payload):
         GLib.idle_add(self._handle_recorder_event, payload)
+
+    def _on_hub_config(self, _topic, payload):
+        GLib.idle_add(self._handle_hub_config, payload)
 
     # ----- GLib-thread handlers -----------------------------------------
 
@@ -128,6 +141,62 @@ class Hub:
         self._publish_hub_state()
         return False
 
+    def _handle_hub_config(self, payload):
+        # The UI publishes the user's request retained; the hub validates +
+        # clamps and stores. We don't republish on every receipt — that would
+        # ping-pong with our own retained message. We only republish when our
+        # normalized value differs from what arrived (i.e. the UI sent us
+        # garbage and we want to correct the retained record).
+        self._seen_hub_config = True
+        before = self._effective_config()
+        changed = False
+        if "motion_timeout_s" in payload:
+            try:
+                v = max(1, min(600, int(payload["motion_timeout_s"])))
+                if v != self.state.motion_timeout_s:
+                    self.state.motion_timeout_s = v
+                    changed = True
+            except (TypeError, ValueError):
+                pass
+        if "trailing_s" in payload:
+            try:
+                v = max(1, min(300, int(payload["trailing_s"])))
+                if v != self.state.trailing_s:
+                    self.state.trailing_s = v
+                    changed = True
+            except (TypeError, ValueError):
+                pass
+        if "target_class" in payload:
+            tc = payload["target_class"]
+            if tc in _VALID_TARGET_CLASSES and tc != self.state.target_class:
+                self.state.target_class = tc
+                changed = True
+
+        effective = self._effective_config()
+        # Republish only if (a) we actually changed something AND (b) the
+        # incoming payload didn't already match the effective view. The second
+        # check breaks the self-publish echo loop.
+        if changed and any(payload.get(k) != effective[k] for k in effective):
+            log.info("hub_config: %s -> %s", before, effective)
+            self.mqtt.publish(TOPIC_HUB_CONFIG, effective, retain=True)
+        elif changed:
+            log.info("hub_config: %s -> %s (no echo)", before, effective)
+        return False
+
+    def _bootstrap_hub_config(self):
+        if not self._seen_hub_config:
+            log.info("no retained hub_config seen; publishing defaults: %s",
+                     self._effective_config())
+            self.mqtt.publish(TOPIC_HUB_CONFIG, self._effective_config(), retain=True)
+        return False  # one-shot
+
+    def _effective_config(self) -> dict:
+        return {
+            "motion_timeout_s": self.state.motion_timeout_s,
+            "trailing_s": self.state.trailing_s,
+            "target_class": self.state.target_class,
+        }
+
     # ----- periodic publishes -------------------------------------------
 
     def _tick_telemetry(self):
@@ -150,8 +219,13 @@ class Hub:
         self.mqtt.subscribe(TOPIC_MOTION, self._on_motion)
         self.mqtt.subscribe(TOPIC_HEALTH_ALL, self._on_health)
         self.mqtt.subscribe(TOPIC_RECORDER_EVENT, self._on_recorder_event)
+        self.mqtt.subscribe(TOPIC_HUB_CONFIG, self._on_hub_config)
 
         GLib.timeout_add_seconds(TELEMETRY_PERIOD_S, self._tick_telemetry)
+        # Give the broker ~500ms to deliver a retained TOPIC_HUB_CONFIG (if any)
+        # before falling back to publishing defaults. Avoids clobbering user
+        # settings on every hub restart.
+        GLib.timeout_add(500, self._bootstrap_hub_config)
         alert_user("info", "hub starting in idle mode", mqtt=self.mqtt)
 
         def shutdown(signum, _frame):

@@ -1,5 +1,6 @@
 import { Link, Route, Routes } from "react-router-dom";
 
+import LogsDrawer from "./components/LogsDrawer";
 import Dashboard from "./routes/Dashboard";
 import Settings from "./routes/Settings";
 import { useSocketBinding } from "./hooks/useHubState";
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
+      <LogsDrawer />
     </div>
   );
 }

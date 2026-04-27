@@ -1,7 +1,7 @@
 """Bridge between paho-mqtt and Flask-SocketIO.
 
 Rule of thumb: MQTT is the source of truth. This module subscribes to the
-topics the browser cares about, caches the last retained/seen payload of each,
+topics the browser cares about, caches the last value of each retained one,
 and re-emits them to Socket.IO clients:
 
   - on every inbound MQTT message -> socketio.emit(event, payload)
@@ -10,19 +10,25 @@ and re-emits them to Socket.IO clients:
                                      retained republish
 
 Command-direction plumbing (POST /api/mode, /api/fire, etc.) lands in
-routes.py in later H-steps.
+routes.py; this module exposes a `publish()` passthrough for that path.
 """
 import logging
 from threading import Lock
-from typing import Dict
+from typing import Dict, Set
 
 from flask_socketio import SocketIO
 
 from common.messaging.client import MqttClient
 from common.messaging.topics import (
+    TOPIC_FIRE_ARMED,
+    TOPIC_FIRE_ENABLE,
+    TOPIC_FIRE_EVENT,
     TOPIC_HEALTH_ALL,
+    TOPIC_HUB_CONFIG,
     TOPIC_HUB_STATE,
     TOPIC_MODE_CURRENT,
+    TOPIC_MOTION_CTRL_ENABLE,
+    TOPIC_MOTION_CTRL_STATE,
     TOPIC_RECORDER_EVENT,
     TOPIC_TELEMETRY,
 )
@@ -30,17 +36,34 @@ from common.messaging.topics import (
 log = logging.getLogger("ui.bridge")
 
 
-# topic -> socket.io event name
+# topic -> socket.io event name (exact-match topics)
 _TOPIC_TO_EVENT: Dict[str, str] = {
-    TOPIC_HUB_STATE:       "hub_state",
-    TOPIC_MODE_CURRENT:    "mode_current",
-    TOPIC_TELEMETRY:       "telemetry",
-    TOPIC_RECORDER_EVENT:  "recorder_event",
+    TOPIC_HUB_STATE:           "hub_state",
+    TOPIC_HUB_CONFIG:          "hub_config",
+    TOPIC_MODE_CURRENT:        "mode_current",
+    TOPIC_TELEMETRY:           "telemetry",
+    TOPIC_RECORDER_EVENT:      "recorder_event",
+    TOPIC_FIRE_ENABLE:         "fire_enable",
+    TOPIC_FIRE_ARMED:          "fire_armed",
+    TOPIC_FIRE_EVENT:          "fire_event",
+    TOPIC_MOTION_CTRL_ENABLE:  "motion_enable",
+    TOPIC_MOTION_CTRL_STATE:   "aim_state",
 }
 
-# wildcard filter -> event name (matched via paho's subscriber model)
+# wildcard filter -> event name
 _WILDCARD_TO_EVENT: Dict[str, str] = {
     TOPIC_HEALTH_ALL: "health",
+}
+
+# Topics whose latest value is replayed to fresh socket connections. Must be
+# the retained ones; live-only events (telemetry, aim_state) would be stale.
+_REPLAY_TOPICS: Set[str] = {
+    TOPIC_HUB_STATE,
+    TOPIC_HUB_CONFIG,
+    TOPIC_MODE_CURRENT,
+    TOPIC_FIRE_ENABLE,
+    TOPIC_FIRE_ARMED,
+    TOPIC_MOTION_CTRL_ENABLE,
 }
 
 
@@ -49,8 +72,8 @@ class MqttBridge:
         self.socketio = socketio
         self.mqtt = MqttClient(service_name="ui-backend")
         self._cache_lock = Lock()
-        # Keep only the retained, "always replay on connect" events cached.
-        self._replay_cache: Dict[str, dict] = {}
+        self._replay_cache: Dict[str, dict] = {}        # event -> payload
+        self._latest: Dict[str, dict] = {}              # topic -> payload
 
     # ---- lifecycle ------------------------------------------------------
 
@@ -75,16 +98,20 @@ class MqttBridge:
         """Thin passthrough so routes.py doesn't import MqttClient directly."""
         self.mqtt.publish(topic, payload, retain=retain)
 
+    def get_latest(self, topic: str) -> dict:
+        """Last-seen payload for a topic; {} if never seen."""
+        with self._cache_lock:
+            return dict(self._latest.get(topic, {}))
+
     # ---- MQTT -> Socket.IO ---------------------------------------------
 
     def _on_mqtt_message(self, topic: str, payload: dict) -> None:
         event = _TOPIC_TO_EVENT.get(topic)
         if event is None:
             return
-        # Retained hub_state / mode_current are the two we replay on connect;
-        # telemetry/recorder_event are live-only.
-        if topic in (TOPIC_HUB_STATE, TOPIC_MODE_CURRENT):
-            with self._cache_lock:
+        with self._cache_lock:
+            self._latest[topic] = payload
+            if topic in _REPLAY_TOPICS:
                 self._replay_cache[event] = payload
         self.socketio.emit(event, payload)
 

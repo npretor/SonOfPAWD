@@ -7,7 +7,7 @@ PI_USER   ?= nathan
 PI_DEST   ?= /home/$(PI_USER)/SonOfPAWD
 SSH_OPTS  ?= -o StrictHostKeyChecking=accept-new
 
-PI_SERVICES   := camera-pipeline sensor-wakeup ir-led
+PI_SERVICES   := camera-pipeline sensor-wakeup ir-led motion-ctrl
 NANO_SERVICES := recorder hub ui-backend
 
 NANO_USER_UNIT_DIR := $(HOME)/.config/systemd/user

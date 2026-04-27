@@ -1,0 +1,20 @@
+# Stable symlink for the Arduino servo controller so motion-ctrl doesn't
+# race against /dev/ttyACM* numbering across reboots / replug.
+#
+# Install:
+#   sudo install -m 644 pi/scripts/udev/99-turret-arduino.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload && sudo udevadm trigger
+#
+# Find your Arduino's vendor/product first:
+#   lsusb        # look for "Arduino" or the clone vendor
+#   udevadm info -a -n /dev/ttyACM0 | grep -E 'idVendor|idProduct|serial'
+#
+# Stock Arduino Uno R3:           idVendor=2341, idProduct=0043
+# Common CH340 clone (Nano):      idVendor=1a86, idProduct=7523
+# FTDI-based clone:               idVendor=0403, idProduct=6001
+#
+# Add a SUBSYSTEM line for whichever device matches yours, then re-trigger.
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2341", ATTRS{idProduct}=="0043", SYMLINK+="turret-arduino", GROUP="dialout", MODE="0660"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="turret-arduino", GROUP="dialout", MODE="0660"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", SYMLINK+="turret-arduino", GROUP="dialout", MODE="0660"

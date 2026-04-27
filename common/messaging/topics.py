@@ -15,6 +15,7 @@ TOPIC_MODE_SET = "turret/mode/set"
 TOPIC_MODE_CURRENT = "turret/mode/current"      # retained
 TOPIC_HUB_STATE = "turret/hub/state"            # retained
 TOPIC_TELEMETRY = "turret/nano/telemetry"
+TOPIC_HUB_CONFIG = "turret/hub/config"          # retained — UI <-> hub settings
 
 TOPIC_IR_MANUAL = "turret/ir/manual"
 
@@ -26,8 +27,11 @@ TOPIC_INFER_DETECT = "turret/inference/detection"
 
 TOPIC_MOTION_CTRL_ENABLE = "turret/motion_ctrl/enable"  # retained
 TOPIC_MOTION_CTRL_AIM = "turret/motion_ctrl/aim"
+TOPIC_MOTION_CTRL_STATE = "turret/motion_ctrl/state"
+TOPIC_MOTION_CTRL_CALIBRATION = "turret/motion_ctrl/calibration"  # retained
 
-TOPIC_FIRE_ENABLE = "turret/fire/enable"        # retained
+TOPIC_FIRE_ENABLE = "turret/fire/enable"        # retained — auto-fire (mode-driven)
+TOPIC_FIRE_ARMED = "turret/fire/armed"          # retained — UI-driven manual arm
 TOPIC_FIRE_REQUEST = "turret/fire/request"
 TOPIC_FIRE_EVENT = "turret/fire/event"
 
