@@ -46,8 +46,8 @@ class Calibration:
 # Defaults documented in motor_control_plan.md §6.3. Conservative full
 # range; real values get measured in phase 3.
 DEFAULT = Calibration(
-    pan=AxisCal(min_us=1000, max_us=2000, center_us=1500, invert=False),
-    tilt=AxisCal(min_us=1000, max_us=2000, center_us=1500, invert=False),
+    pan=AxisCal(min_us=1000, max_us=2000, center_us=1500, invert=True),
+    tilt=AxisCal(min_us=1000, max_us=2000, center_us=1500, invert=True),
     max_slew_us_per_tick=40,
     tick_hz=50,
     state_publish_hz=5,
