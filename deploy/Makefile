@@ -1,92 +1,35 @@
-# SonOfPAWD deployment helpers.
-# Run from the repo root:  make -C deploy deploy-pi
+# SonOfPAWD deployment helpers. Everything runs on the Jetson Nano.
+# Run on the Nano from the repo root:  make -C deploy <target>
 
 REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
-PI_HOST   ?= testcam-64bit.local
-PI_USER   ?= nathan
-PI_DEST   ?= /home/$(PI_USER)/SonOfPAWD
-SSH_OPTS  ?= -o StrictHostKeyChecking=accept-new
 
-PI_SERVICES   := sensor-wakeup ir-led motion-ctrl
-NANO_SERVICES := mediamtx recorder hub ui-backend inference
+NANO_SERVICES := mediamtx recorder hub ui-backend inference \
+                 sensor-wakeup ir-led motion-ctrl fire-control
 # camera-pipeline is a *system* unit (see nano/systemd/system/); managed with sudo.
 CAMERA_UNIT   := camera-pipeline
 CAMERA_HELPER := /usr/local/lib/turret/camera-recover.sh
 
 NANO_USER_UNIT_DIR := $(HOME)/.config/systemd/user
 
-RSYNC_FLAGS := -avz --delete --exclude-from=$(REPO_ROOT)/deploy/rsync-exclude.txt
-
 UI_DIR := $(REPO_ROOT)/nano/src/ui/frontend
 
 .PHONY: help \
-        deploy-pi install-pi-units enable-pi-units restart-pi stop-pi start-pi logs-pi status-pi ssh-pi \
         install-nano-units enable-nano-units restart-nano stop-nano start-nano logs-nano status-nano \
         install-camera-unit restart-camera stop-camera logs-camera status-camera \
-        ui-install ui-build ui-dev
+        test ui-install ui-build ui-dev
 
 help:
-	@echo "Targets:"
-	@echo "  deploy-pi          rsync pi/ and common/ to the Pi, then restart services"
-	@echo "  install-pi-units   copy systemd unit files to the Pi and daemon-reload"
-	@echo "  enable-pi-units    enable all Pi services to start on boot"
-	@echo "  restart-pi         systemctl --user restart [$(PI_SERVICES)] on Pi"
-	@echo "  stop-pi            stop Pi services"
-	@echo "  start-pi           start Pi services"
-	@echo "  logs-pi            journalctl -f for all Pi services"
-	@echo "  status-pi          systemctl --user status for each Pi service"
-	@echo "  ssh-pi             interactive SSH to the Pi"
-	@echo ""
-	@echo "Nano (run on the Nano itself):"
+	@echo "User units [$(NANO_SERVICES)]:"
 	@echo "  install-nano-units copy systemd unit files into ~/.config/systemd/user and reload"
-	@echo "  enable-nano-units  enable Nano services to start on boot"
-	@echo "  restart-nano       systemctl --user restart [$(NANO_SERVICES)]"
-	@echo "  stop-nano          stop Nano services"
-	@echo "  start-nano         start Nano services"
-	@echo "  logs-nano          journalctl -f for all Nano services"
-	@echo "  status-nano        systemctl --user status for each Nano service"
+	@echo "  enable-nano-units  enable them to start on boot"
+	@echo "  restart-nano / stop-nano / start-nano / logs-nano / status-nano"
 	@echo ""
-	@echo "Nano camera-pipeline (system unit; needs sudo):"
+	@echo "camera-pipeline (system unit; needs sudo):"
 	@echo "  install-camera-unit  install unit + root-owned recovery helper, enable"
 	@echo "  restart-camera / stop-camera / logs-camera / status-camera"
 	@echo ""
-	@echo "Override with e.g.  make deploy-pi PI_HOST=192.168.1.42"
-
-deploy-pi:
-	ssh $(SSH_OPTS) $(PI_USER)@$(PI_HOST) "mkdir -p $(PI_DEST)/pi $(PI_DEST)/common"
-	rsync $(RSYNC_FLAGS) $(REPO_ROOT)/pi/     $(PI_USER)@$(PI_HOST):$(PI_DEST)/pi/
-	rsync $(RSYNC_FLAGS) $(REPO_ROOT)/common/ $(PI_USER)@$(PI_HOST):$(PI_DEST)/common/
-	@echo "Deployed. Use 'make restart-pi' to apply code changes."
-
-install-pi-units:
-	ssh $(SSH_OPTS) $(PI_USER)@$(PI_HOST) "mkdir -p ~/.config/systemd/user"
-	scp $(SSH_OPTS) $(REPO_ROOT)/pi/systemd/*.service \
-	    $(PI_USER)@$(PI_HOST):~/.config/systemd/user/
-	ssh $(SSH_OPTS) $(PI_USER)@$(PI_HOST) "systemctl --user daemon-reload"
-
-enable-pi-units:
-	ssh $(SSH_OPTS) $(PI_USER)@$(PI_HOST) \
-	    "systemctl --user enable $(PI_SERVICES) && loginctl enable-linger $(PI_USER) || true"
-
-restart-pi:
-	ssh $(SSH_OPTS) $(PI_USER)@$(PI_HOST) "systemctl --user restart $(PI_SERVICES)"
-
-stop-pi:
-	ssh $(SSH_OPTS) $(PI_USER)@$(PI_HOST) "systemctl --user stop $(PI_SERVICES)"
-
-start-pi:
-	ssh $(SSH_OPTS) $(PI_USER)@$(PI_HOST) "systemctl --user start $(PI_SERVICES)"
-
-logs-pi:
-	ssh $(SSH_OPTS) $(PI_USER)@$(PI_HOST) \
-	    "journalctl --user -f $(foreach s,$(PI_SERVICES),-u $(s))"
-
-status-pi:
-	ssh $(SSH_OPTS) $(PI_USER)@$(PI_HOST) \
-	    "for s in $(PI_SERVICES); do systemctl --user status \$$s --no-pager -n 5 || true; echo; done"
-
-ssh-pi:
-	ssh $(SSH_OPTS) $(PI_USER)@$(PI_HOST)
+	@echo "  test               run the hardware-free unit tests"
+	@echo "  ui-install / ui-build / ui-dev"
 
 # --- Nano targets (run locally on the Nano; no SSH) ---
 
@@ -139,6 +82,9 @@ logs-camera:
 
 status-camera:
 	systemctl status $(CAMERA_UNIT) --no-pager -n 20 || true
+
+test:
+	cd $(REPO_ROOT) && python3 -m unittest discover -s nano/tests -t .
 
 # --- UI targets (run on the Nano or a dev box with Node 18+) ---
 

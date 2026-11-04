@@ -63,17 +63,33 @@ sudo tee /etc/mosquitto/conf.d/turret.conf >/dev/null <<EOF
 allow_anonymous false
 password_file /etc/mosquitto/passwd
 EOF
-sudo systemctl restart mosquitto
-sleep 1
-if ! systemctl is-active --quiet mosquitto; then
-    echo "  mosquitto failed to start after applying auth config."
-    echo "  Recent log:"
-    sudo journalctl -u mosquitto --no-pager -n 30
+# mosquitto on 18.04 is an LSB init script: its 'stop' returns before the old
+# broker has exited, and 'start' backgrounds the daemon and reports success
+# even if it dies at once (e.g. port 1883 still held by the exiting broker).
+# systemd then shows "active (exited)" with no broker running. So: stop, wait
+# for the process to really be gone, start, and wait for the port to listen.
+sudo systemctl stop mosquitto
+for _ in $(seq 1 50); do pgrep -x mosquitto >/dev/null || break; sleep 0.2; done
+if pgrep -x mosquitto >/dev/null; then
+    echo "  old mosquitto still running after 10s; killing it"
+    sudo pkill -x mosquitto || true
+    sleep 1
+fi
+sudo systemctl start mosquitto
+LISTENING=0
+for _ in $(seq 1 50); do
+    if ss -ltn 2>/dev/null | grep -q ':1883 '; then LISTENING=1; break; fi
+    sleep 0.2
+done
+if [ "$LISTENING" != 1 ]; then
+    echo "  mosquitto is not listening on :1883 after applying auth config."
+    echo "  Broker log:"
+    sudo tail -n 30 /var/log/mosquitto/mosquitto.log
     exit 1
 fi
+echo "  mosquitto listening on :1883"
 PW_SHA=$(echo -n "$PW" | sha256sum | awk '{print $1}')
 echo "  password sha256: $PW_SHA"
-echo "  (scp /etc/turret/mqtt.password to each Pi and confirm this sha256 matches)"
 
 echo "== smoke test mosquitto =="
 mosquitto_pub -h localhost -u turret -P "$PW" -t turret/test/prep -m '{"ts":0,"ok":true}' \
@@ -116,6 +132,26 @@ else
     echo "  $ENGINE_PATH exists, skipping"
 fi
 
+echo "== GPIO + serial access (sensor-wakeup, ir-led, motion-ctrl, fire-control) =="
+NEED_RELOGIN=0
+for grp in gpio dialout; do
+    if id -nG "$USER" | tr ' ' '\n' | grep -qx "$grp"; then
+        echo "  $USER already in $grp"
+    else
+        sudo usermod -aG "$grp" "$USER"
+        echo "  added $USER to $grp"
+        NEED_RELOGIN=1
+    fi
+done
+sudo install -m 644 "$REPO_ROOT/nano/scripts/udev/99-turret-arduino.rules" /etc/udev/rules.d/
+sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=tty
+echo "  udev rule installed (/dev/turret-arduino appears when the Arduino is plugged in)"
+sudo install -d -o "$USER" -g "$USER" /var/lib/turret/motion_ctrl
+echo "  $(ls -ld /var/lib/turret/motion_ctrl)"
+python3 -c "import Jetson.GPIO, serial, dataclasses" \
+    && echo "  Jetson.GPIO / pyserial / dataclasses: OK" \
+    || { echo "  missing python deps -- run: pip3 install --user -r nano/requirements.txt"; exit 1; }
+
 echo "== enable lingering for user systemd units =="
 sudo loginctl enable-linger "$USER"
 
@@ -135,4 +171,7 @@ else
 fi
 
 echo "== done =="
-echo "Next: 'make -C deploy install-nano-units enable-nano-units start-nano'."
+if [ "${NEED_RELOGIN:-0}" = 1 ]; then
+    echo "NOTE: group membership changed -- reboot (or log out/in) before starting the GPIO services."
+fi
+echo "Next: 'make -C deploy install-nano-units enable-nano-units start-nano install-camera-unit'."

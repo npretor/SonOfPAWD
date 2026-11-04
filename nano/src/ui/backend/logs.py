@@ -1,21 +1,16 @@
 """journalctl wrapper. Whitelisted services only — never feed the URL slug
 straight into a shell.
 
-Nano-side services run via `systemctl --user`, so we use `--user-unit=`.
-Mosquitto and camera-pipeline are system units so they get `-u <name>`. Pi-side services are
-fetched over SSH (the deploy Makefile already uses the same login).
+Most services run via `systemctl --user` (queried by _SYSTEMD_USER_UNIT, see
+below). Mosquitto and camera-pipeline are system units so they get `-u <name>`.
 """
 import logging
 import subprocess
 from typing import Dict, List
 
-from common.config.hosts import PI_HOST
-
 log = logging.getLogger("ui.logs")
 
-PI_SSH_USER = "nathan"
-
-# Each entry is (location, kind). kind ∈ {"user", "system", "pi"}.
+# kind ∈ {"user", "system"}.
 _SERVICES: Dict[str, str] = {
     "recorder":         "user",
     "hub":              "user",
@@ -24,10 +19,10 @@ _SERVICES: Dict[str, str] = {
     "mediamtx":         "user",
     "mosquitto":        "system",
     "camera-pipeline":  "system",
-    "sensor-wakeup":    "pi",
-    "ir-led":           "pi",
-    "fire-control":     "pi",
-    "motion-ctrl":      "pi",
+    "sensor-wakeup":    "user",
+    "ir-led":           "user",
+    "fire-control":     "user",
+    "motion-ctrl":      "user",
 }
 
 KNOWN_SERVICES = sorted(_SERVICES.keys())
@@ -51,15 +46,6 @@ def fetch(service: str, lines: int) -> Dict[str, object]:
         ]
     elif kind == "system":
         cmd = ["journalctl", "-u", service, "-n", str(lines), "--no-pager"]
-    elif kind == "pi":
-        # Pi services are systemctl --user units run as `nathan`. The remote
-        # call is non-interactive: BatchMode prevents a hanging password prompt
-        # if SSH keys aren't set up.
-        remote = f"journalctl --user --user-unit={service} -n {lines} --no-pager"
-        cmd = [
-            "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=4",
-            f"{PI_SSH_USER}@{PI_HOST}", remote,
-        ]
     else:
         raise ValueError(f"unhandled kind: {kind}")
 

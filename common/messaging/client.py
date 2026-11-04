@@ -93,6 +93,9 @@ class MqttClient:
         self._client.loop_stop()
         self._client.disconnect()
 
+    def is_connected(self) -> bool:
+        return self._client.is_connected()
+
     def publish(self, topic: str, payload: dict, retain: bool = False) -> None:
         if "ts" not in payload:
             payload["ts"] = int(time.time() * 1000)

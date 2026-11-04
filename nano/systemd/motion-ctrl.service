@@ -1,0 +1,20 @@
+[Unit]
+Description=SonOfPAWD motion-ctrl (MQTT -> Arduino servo controller + servo PSU GPIO)
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/github/SonOfPAWD
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m nano.src.motion_ctrl.main
+# Runs after EVERY exit, including SIGKILL/crash: a dead process leaves sysfs
+# GPIO driving its last value (measured), so force the actuator pins low.
+ExecStopPost=/usr/bin/python3 -m nano.src.hw.force_low 24
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

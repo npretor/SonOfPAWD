@@ -253,12 +253,6 @@ before cutover:
 Roughly half a day of code (the new service is about 150 lines, plus config
 and unit edits), plus the calibration work from §5.
 
-## 8. Later phases (outline only)
-- **ir-led, sensor-wakeup**: PIR and the IR LED move to the Nano's 40-pin
-  header using `Jetson.GPIO` (apt `python3-jetson-gpio`) instead of
-  `gpiozero`. BCM pin numbers don't carry over; remap them in `hosts.py`.
-  The Nano's header is 3.3 V like the Pi's.
-- **motion-ctrl**: the Arduino is USB serial, so the move is mostly the
-  udev rule plus `pyserial`. Move the servo PSU enable pin (GPIO 24) with it.
-- After that, the Pi can be retired. Remove `PI_HOST`, the `*-pi` Makefile
-  targets, and the `"pi"` kind in `logs.py`.
+## 8. Later phases
+See `pi_services_nano_migration_plan.md`, which covers sensor-wakeup, ir-led,
+motion-ctrl, the unbuilt fire-control service, and retiring the Pi.

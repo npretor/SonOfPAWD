@@ -1,4 +1,4 @@
-# Shared by Pi and Nano. Installed system-wide on each host via apt
-# (python3-paho-mqtt). Listed here so a venv-based dev setup can
+# Shared deps. paho-mqtt is installed via pip on the Nano (1.6.x; the apt
+# python3-paho-mqtt 1.3 lacks is_connected()). Listed here so a venv-based dev setup can
 # `pip install -r` instead.
 paho-mqtt>=1.6,<3

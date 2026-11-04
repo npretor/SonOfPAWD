@@ -1,11 +1,10 @@
-"""Single source of truth for cross-host config.
+"""Single source of truth for turret config.
 
-Both Pi and Nano import from here. Change values in one place, deploy to both.
+Everything runs on the Jetson Nano (the Pi was retired Nov 2026).
 """
 
-# --- Hosts (mDNS names; fall back to IPs if avahi is flaky) ---
+# --- Host (mDNS name; fall back to the IP if avahi is flaky) ---
 NANO_HOST = "dlinano-hqcam.local"
-PI_HOST = "testcam-64bit.local"
 
 # --- MQTT (broker runs on Nano) ---
 MQTT_HOST = NANO_HOST
@@ -38,7 +37,9 @@ CAMERA_FLIP = 0          # nvvidconv flip-method; 0 = none, 2 = rotate 180
 # nano/scripts/camera_recover.sh reads.
 CAMERA_STATE_DIR = "/run/camera-pipeline"
 
-# --- Pi GPIO (BCM numbering). Update to match actual wiring. ---
+# --- 40-pin header GPIO, BCM numbering (Jetson.GPIO BCM mode, nano/src/hw/gpio.py).
+# Same physical pins as on the Pi: BCM17=pin 11, 27=13, 24=18, 22=15, 23=16.
+# All outputs feed optoisolators with pull-downs on their inputs. ---
 PIR_PIN = 17
 IR_LED_PIN = 27
 # Servo PSU enable (motor_control_plan.md §3). Active high; gates the
@@ -46,13 +47,23 @@ IR_LED_PIN = 27
 # never energized into an unknown commanded position.
 SERVO_POWER_PIN = 24
 
-# --- Servo controller (Arduino over USB, on the Pi). ---
-# Stable path is provided by pi/scripts/udev/99-turret-arduino.rules. Falls
-# back to /dev/ttyACM0 in dev if the rule isn't installed.
+# --- Servo controller (Arduino over USB). ---
+# Stable path is provided by nano/scripts/udev/99-turret-arduino.rules
+# (installed by nano/scripts/host_prep.sh). For dev without the rule, override
+# to /dev/ttyACM0.
 SERVO_SERIAL_DEV = "/dev/turret-arduino"
 SERVO_SERIAL_BAUD = 115200
 
-# --- Motion debounce on the Pi ---
+# --- Fire control (core_service_implimentation.md §3.2) ---
+FIRE_ENABLE_PIN = 22
+FIRE_TRIGGER_PIN = 23
+FIRE_PULSE_MS = 250          # default valve-open time when a request omits pulse_ms
+FIRE_MAX_PULSE_MS = 1000     # hard clamp on any requested pulse
+# Slightly under the UI backend's 0.4 s limit so network jitter can't make a
+# legitimately rate-limited UI request bounce here.
+FIRE_MIN_INTERVAL_S = 0.35
+
+# --- PIR motion debounce ---
 PIR_INACTIVE_AFTER_S = 2.0
 
 # --- Recording (Nano) ---
