@@ -2,7 +2,7 @@
 straight into a shell.
 
 Nano-side services run via `systemctl --user`, so we use `--user-unit=`.
-Mosquitto is a system unit so it gets `-u <name>`. Pi-side services are
+Mosquitto and camera-pipeline are system units so they get `-u <name>`. Pi-side services are
 fetched over SSH (the deploy Makefile already uses the same login).
 """
 import logging
@@ -23,7 +23,7 @@ _SERVICES: Dict[str, str] = {
     "inference":        "user",
     "mediamtx":         "user",
     "mosquitto":        "system",
-    "camera-pipeline":  "pi",
+    "camera-pipeline":  "system",
     "sensor-wakeup":    "pi",
     "ir-led":           "pi",
     "fire-control":     "pi",

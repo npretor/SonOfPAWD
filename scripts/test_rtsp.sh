@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Spin up a loopback RTSP server using gst-rtsp-server's test-launch binary.
-# Stream is available at rtsp://<nano-ip>:8554/live
-# Open from a laptop with: vlc rtsp://<nano-ip>:8554/live
+# Stream is available at rtsp://<nano-ip>:8556/live
+# Open from a laptop with: vlc rtsp://<nano-ip>:8556/live
+# Stop camera-pipeline first (make -C deploy stop-camera): one Argus client per sensor.
 #
 # Usage: ./test_rtsp.sh [port]
-#   port  RTSP port to listen on (default: 8554)
+#   port  RTSP port to listen on (default: 8556)
 #
 # Requires: gst-rtsp-server (apt: gstreamer1.0-rtsp)
 # The test-launch binary is usually at /usr/lib/gstreamer-1.0/gst-rtsp-server
@@ -12,7 +13,7 @@
 
 set -euo pipefail
 
-PORT="${1:-8554}"
+PORT="${1:-8556}"  # 8554 belongs to MediaMTX
 
 echo "=== SonOfPAWD RTSP smoke-test ==="
 echo "Port: ${PORT}"
@@ -47,10 +48,10 @@ echo ""
 echo "Press Ctrl-C to stop."
 echo ""
 
-# Pipeline: IMX477 → NVMM → H.264 (NVENC) → RTP payload
+# Pipeline: IMX219 → NVMM → H.264 (NVENC) → RTP payload
 # test-launch wraps this in an RTSP server automatically.
 "${TEST_LAUNCH}" --port "${PORT}" \
-    "( nvarguscamerasrc \
+    "( nvarguscamerasrc sensor-id=0 sensor-mode=2 \
        ! 'video/x-raw(memory:NVMM),width=1920,height=1080,framerate=30/1' \
        ! nvv4l2h264enc iframeinterval=30 bitrate=4000000 \
        ! h264parse \

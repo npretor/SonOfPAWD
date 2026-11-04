@@ -16,20 +16,27 @@ MQTT_KEEPALIVE_S = 30
 MQTT_USERNAME = "turret"
 MQTT_PASSWORD_FILE = "/etc/turret/mqtt.password"
 
-# --- RTSP published by the Pi's camera-pipeline ---
+# --- RTSP: the Nano's camera-pipeline publishes into the local MediaMTX,
+# which serves it to recorder / inference / UI (WebRTC). ---
 RTSP_PORT = 8554
 RTSP_PATH = "/live"
-RTSP_URL = f"rtsp://{PI_HOST}:{RTSP_PORT}{RTSP_PATH}"
-
-# --- RTSP re-published by the Nano's streamer (§5 step 7) ---
-NANO_RTSP_PORT = 8555
-NANO_RTSP_URL = f"rtsp://{NANO_HOST}:{NANO_RTSP_PORT}{RTSP_PATH}"
+RTSP_URL = f"rtsp://127.0.0.1:{RTSP_PORT}{RTSP_PATH}"
 
 # --- Camera encode settings ---
 CAMERA_WIDTH = 1920
 CAMERA_HEIGHT = 1080
 CAMERA_FPS = 30
 CAMERA_BITRATE = 6_000_000  # 6 Mbps H.264
+
+# --- Nano camera (IMX219 NoIR on CAM1, via nvarguscamerasrc) ---
+CAMERA_SENSOR_ID = 0     # Argus index; only one sensor is enumerated
+# Always pin the mode. Mode 2 = 1920x1080@30 (center crop). Letting Argus pick
+# a full-res mode has exhausted NVMM and panicked this Nano before.
+CAMERA_SENSOR_MODE = 2
+CAMERA_FLIP = 0          # nvvidconv flip-method; 0 = none, 2 = rotate 180
+# Runtime dir (systemd RuntimeDirectory=) for the 'healthy' marker that
+# nano/scripts/camera_recover.sh reads.
+CAMERA_STATE_DIR = "/run/camera-pipeline"
 
 # --- Pi GPIO (BCM numbering). Update to match actual wiring. ---
 PIR_PIN = 17

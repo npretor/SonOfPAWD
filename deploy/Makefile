@@ -7,8 +7,11 @@ PI_USER   ?= nathan
 PI_DEST   ?= /home/$(PI_USER)/SonOfPAWD
 SSH_OPTS  ?= -o StrictHostKeyChecking=accept-new
 
-PI_SERVICES   := camera-pipeline sensor-wakeup ir-led motion-ctrl
-NANO_SERVICES := recorder hub ui-backend inference
+PI_SERVICES   := sensor-wakeup ir-led motion-ctrl
+NANO_SERVICES := mediamtx recorder hub ui-backend inference
+# camera-pipeline is a *system* unit (see nano/systemd/system/); managed with sudo.
+CAMERA_UNIT   := camera-pipeline
+CAMERA_HELPER := /usr/local/lib/turret/camera-recover.sh
 
 NANO_USER_UNIT_DIR := $(HOME)/.config/systemd/user
 
@@ -19,6 +22,7 @@ UI_DIR := $(REPO_ROOT)/nano/src/ui/frontend
 .PHONY: help \
         deploy-pi install-pi-units enable-pi-units restart-pi stop-pi start-pi logs-pi status-pi ssh-pi \
         install-nano-units enable-nano-units restart-nano stop-nano start-nano logs-nano status-nano \
+        install-camera-unit restart-camera stop-camera logs-camera status-camera \
         ui-install ui-build ui-dev
 
 help:
@@ -41,6 +45,10 @@ help:
 	@echo "  start-nano         start Nano services"
 	@echo "  logs-nano          journalctl -f for all Nano services"
 	@echo "  status-nano        systemctl --user status for each Nano service"
+	@echo ""
+	@echo "Nano camera-pipeline (system unit; needs sudo):"
+	@echo "  install-camera-unit  install unit + root-owned recovery helper, enable"
+	@echo "  restart-camera / stop-camera / logs-camera / status-camera"
 	@echo ""
 	@echo "Override with e.g.  make deploy-pi PI_HOST=192.168.1.42"
 
@@ -105,6 +113,32 @@ logs-nano:
 
 status-nano:
 	@for s in $(NANO_SERVICES); do systemctl --user status $$s --no-pager -n 5 || true; echo; done
+
+# --- Nano camera-pipeline (system unit, run on the Nano) ---
+# The recovery helper runs as root (ExecStopPost=+), so it is installed
+# root-owned outside the repo; re-run this target after editing it.
+
+install-camera-unit:
+	sudo install -d -m 755 -o root -g root /usr/local/lib/turret
+	sudo install -m 755 -o root -g root $(REPO_ROOT)/nano/scripts/camera_recover.sh $(CAMERA_HELPER)
+	sed -e 's|@USER@|$(USER)|g' -e 's|@REPO@|$(REPO_ROOT)|g' \
+	    $(REPO_ROOT)/nano/systemd/system/$(CAMERA_UNIT).service \
+	    | sudo tee /etc/systemd/system/$(CAMERA_UNIT).service >/dev/null
+	sudo systemctl daemon-reload
+	sudo systemctl enable $(CAMERA_UNIT)
+	@echo "Installed. Start with: sudo systemctl start $(CAMERA_UNIT)"
+
+restart-camera:
+	sudo systemctl restart $(CAMERA_UNIT)
+
+stop-camera:
+	sudo systemctl stop $(CAMERA_UNIT)
+
+logs-camera:
+	journalctl -f -u $(CAMERA_UNIT)
+
+status-camera:
+	systemctl status $(CAMERA_UNIT) --no-pager -n 20 || true
 
 # --- UI targets (run on the Nano or a dev box with Node 18+) ---
 

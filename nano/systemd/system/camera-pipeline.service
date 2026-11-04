@@ -1,0 +1,42 @@
+# SYSTEM unit (not a user unit like the others) so the root-owned recovery
+# helper can restart nvargus-daemon / reboot, and so we can order after
+# nvargus-daemon. The service itself still runs as the normal user.
+#
+# Template: @USER@ and @REPO@ are filled in by
+#   make -C deploy install-camera-unit
+# which installs to /etc/systemd/system/camera-pipeline.service.
+[Unit]
+Description=SonOfPAWD camera-pipeline (IMX219 -> Argus -> NVENC H.264 -> MediaMTX)
+After=nvargus-daemon.service network-online.target
+Wants=nvargus-daemon.service network-online.target
+# Never give up restarting; escalation (daemon restart, reboot) is handled by
+# camera-recover.sh, which can tell camera failures from MediaMTX outages.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+SupplementaryGroups=video
+WorkingDirectory=@REPO@
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m nano.src.camera_pipeline.main
+# '+' = run with full privileges. Must be the root-owned installed copy.
+ExecStopPost=+/usr/local/lib/turret/camera-recover.sh
+Restart=always
+RestartSec=3
+# Python drains EOS (<=2s) and caps teardown at 5s; the helper may back off
+# 30s. Generous margin so systemd doesn't SIGKILL a clean shutdown.
+TimeoutStopSec=60
+# /run/camera-pipeline, owned by @USER@, kept across restarts: holds the
+# 'healthy' marker the helper reads.
+RuntimeDirectory=camera-pipeline
+RuntimeDirectoryPreserve=yes
+# Prefer the OOM killer pick something else: being SIGKILLed mid-capture is a
+# classic way to wedge nvargus-daemon.
+OOMScoreAdjust=-500
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
