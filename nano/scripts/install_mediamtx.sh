@@ -5,7 +5,7 @@ set -euo pipefail
 
 VER="1.8.4"
 INSTALL_DIR="/opt/mediamtx"
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 CONF_SRC="$REPO_ROOT/nano/mediamtx/mediamtx.yml"
 
 case "$(uname -m)" in
@@ -36,7 +36,7 @@ cat <<EOF
 Next:
   make -C deploy install-nano-units     # copies mediamtx.service into user systemd
   systemctl --user enable --now mediamtx
-  journalctl --user-unit=mediamtx -f    # watch it pull from the Pi
+  journalctl --user-unit=mediamtx -f    # camera-pipeline publishes into it
 
 Then open in a browser on this LAN:
   http://$(hostname -s).local:8889/live    (MediaMTX built-in WHEP player)

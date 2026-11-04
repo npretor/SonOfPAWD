@@ -13,7 +13,9 @@ python-engineio>=4.3,<4.5
 simple-websocket>=0.5,<1.1   # optional; enables WS transport in threading mode
 
 # GPIO / serial services (sensor-wakeup, ir-led, motion-ctrl, fire-control).
-# Jetson.GPIO ships with JetPack; pinned here for completeness.
-Jetson.GPIO>=2.0
+# Jetson.GPIO ships with JetPack (2.0.17, sysfs backend, works for the gpio
+# group). 2.1+ switched to /dev/gpiochip*, which is root-only on L4T 32 --
+# keep the cap so pip never shadows the JetPack copy in ~/.local.
+Jetson.GPIO>=2.0,<2.1
 pyserial>=3.5
 dataclasses>=0.8; python_version < "3.7"   # motion-ctrl calibration on Py3.6

@@ -6,6 +6,12 @@ set -euo pipefail
 
 echo "== apt packages =="
 sudo apt update
+# JetPack already ships GStreamer 1.14 plus NVIDIA's accelerated plugins
+# (nvidia-l4t-gstreamer: nvarguscamerasrc, nvv4l2h264enc, nvv4l2decoder,
+# nvvidconv), python3-gi, numpy, OpenCV and TensorRT. Do NOT apt-install
+# Ubuntu's python3-opencv / TensorRT bindings over them. Inference deps
+# (cv2, numpy, tensorrt, pycuda) live in the container, not on the host.
+# paho-mqtt comes from pip (nano/requirements.txt); apt's 1.3 is too old.
 sudo apt install -y \
     mosquitto \
     mosquitto-clients \
@@ -13,15 +19,9 @@ sudo apt install -y \
     gstreamer1.0-plugins-base \
     gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad \
-    gstreamer1.0-libav \
     gstreamer1.0-rtsp \
-    python3-gst-1.0 \
     python3-gi \
-    python3-paho-mqtt \
-    python3-numpy \
-    python3-opencv \
-    python3-libnvinfer \
-    python3-libnvinfer-dev \
+    python3-pip \
     avahi-daemon
 
 echo "== create clips directory (recorder needs this to start) =="
@@ -30,7 +30,8 @@ sudo chown "$USER":"$USER" /var/lib/turret/clips
 echo "  $(ls -ld /var/lib/turret/clips)"
 
 echo "== verify GStreamer elements =="
-for el in rtspsrc rtph264depay h264parse splitmuxsink mp4mux; do
+for el in nvarguscamerasrc nvvidconv nvv4l2h264enc h264parse rtspclientsink \
+          rtspsrc rtph264depay splitmuxsink matroskamux; do
     if gst-inspect-1.0 "$el" >/dev/null 2>&1; then
         echo "  $el: OK"
     else
@@ -109,7 +110,11 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 echo "== inference container image =="
 INFERENCE_TAG="${INFERENCE_IMAGE:-turret-inference:r32.7.1}"
-if docker image inspect "$INFERENCE_TAG" >/dev/null 2>&1; then
+if ! docker info >/dev/null 2>&1; then
+    echo "  docker not accessible as $USER yet (docker group is added below)."
+    echo "  Reboot, then re-run this script to build the image and engine."
+    SKIP_DOCKER=1
+elif docker image inspect "$INFERENCE_TAG" >/dev/null 2>&1; then
     echo "  $INFERENCE_TAG present, skipping"
 else
     echo "  building $INFERENCE_TAG (first run pulls the L4T base, ~5-10 GB)"
@@ -120,7 +125,9 @@ fi
 echo "== TensorRT engine =="
 ENGINE_PATH=/var/lib/turret/models/yolov8n.engine
 ONNX_PATH="$REPO_ROOT/nano/src/inference/models/yolov8n.onnx"
-if [ ! -f "$ENGINE_PATH" ]; then
+if [ "${SKIP_DOCKER:-0}" = 1 ]; then
+    echo "  skipped (docker not accessible yet)"
+elif [ ! -f "$ENGINE_PATH" ]; then
     if [ -f "$ONNX_PATH" ]; then
         echo "  building $ENGINE_PATH (this can take 2-4 minutes)"
         "$REPO_ROOT/nano/scripts/build_engine.sh" || \
@@ -132,9 +139,9 @@ else
     echo "  $ENGINE_PATH exists, skipping"
 fi
 
-echo "== GPIO + serial access (sensor-wakeup, ir-led, motion-ctrl, fire-control) =="
+echo "== GPIO + serial + docker access (sensor-wakeup, ir-led, motion-ctrl, fire-control, inference) =="
 NEED_RELOGIN=0
-for grp in gpio dialout; do
+for grp in gpio dialout docker; do
     if id -nG "$USER" | tr ' ' '\n' | grep -qx "$grp"; then
         echo "  $USER already in $grp"
     else
@@ -148,8 +155,10 @@ sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=tty
 echo "  udev rule installed (/dev/turret-arduino appears when the Arduino is plugged in)"
 sudo install -d -o "$USER" -g "$USER" /var/lib/turret/motion_ctrl
 echo "  $(ls -ld /var/lib/turret/motion_ctrl)"
-python3 -c "import Jetson.GPIO, serial, dataclasses" \
-    && echo "  Jetson.GPIO / pyserial / dataclasses: OK" \
+echo "== python deps (pip, --user) =="
+pip3 install --user -r "$REPO_ROOT/nano/requirements.txt"
+python3 -c "import Jetson.GPIO, serial, dataclasses, paho.mqtt.client" \
+    && echo "  Jetson.GPIO / pyserial / dataclasses / paho-mqtt: OK" \
     || { echo "  missing python deps -- run: pip3 install --user -r nano/requirements.txt"; exit 1; }
 
 echo "== enable lingering for user systemd units =="
