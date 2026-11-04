@@ -13,11 +13,15 @@ from common.messaging.topics import (
     TOPIC_FIRE_ENABLE,
     TOPIC_FIRE_REQUEST,
     TOPIC_HUB_CONFIG,
+    TOPIC_MODE_CURRENT,
     TOPIC_MODE_SET,
     TOPIC_MOTION_CTRL_AIM,
     TOPIC_MOTION_CTRL_CALIBRATION,
     TOPIC_MOTION_CTRL_ENABLE,
+    TOPIC_RECORDER_ARM,
 )
+
+_MANUAL_RECORD_MODES = {"auto-aim", "auto-sentry"}
 
 # Bounds mirror pi/src/motion_ctrl/calibration.py so we can reject bad PUTs
 # without round-tripping to the Pi (which may be offline).
@@ -61,6 +65,7 @@ def _validate_calibration(payload):
     }
 
 from nano.src.hub.modes import VALID_MODES
+from nano.src.ui.backend import clips as clips_mod
 from nano.src.ui.backend import logs as logs_mod
 from nano.src.ui.backend import settings as settings_mod
 from nano.src.ui.backend.mqtt_bridge import MqttBridge
@@ -133,6 +138,23 @@ def register_routes(app: Flask, bridge: MqttBridge) -> None:
         log.info("published motion_ctrl/calibration -> %s", normalized)
         return jsonify(normalized)
 
+    @app.post("/api/recorder/arm")
+    def set_recorder_arm():
+        body = request.get_json(silent=True) or {}
+        on = bool(body.get("on", False))
+        mode = bridge.get_latest(TOPIC_MODE_CURRENT).get("mode")
+        if mode not in _MANUAL_RECORD_MODES:
+            return jsonify({
+                "error": "wrong_mode",
+                "mode": mode,
+                "valid": sorted(_MANUAL_RECORD_MODES),
+            }), 409
+        # Manual stop = stop now (trailing_s=0). Manual start: trailing_s is
+        # only consulted on disarm, so the value is moot for armed=true.
+        bridge.publish(TOPIC_RECORDER_ARM, {"armed": on, "trailing_s": 0})
+        log.info("published recorder/arm -> %s (manual, mode=%s)", on, mode)
+        return jsonify({"ok": True, "armed": on})
+
     @app.post("/api/motion-ctrl/enable")
     def set_motion_enable():
         body = request.get_json(silent=True) or {}
@@ -197,3 +219,62 @@ def register_routes(app: Flask, bridge: MqttBridge) -> None:
     @app.get("/api/logs")
     def list_log_services():
         return jsonify({"services": logs_mod.KNOWN_SERVICES})
+
+    # ---- clips ----------------------------------------------------------
+
+    @app.get("/api/clips")
+    def get_clips():
+        clips = clips_mod.list_clips()
+        total = sum(c["size_bytes"] or 0 for c in clips)
+        return jsonify({"clips": clips, "total_bytes": total})
+
+    @app.get("/api/clips/<name>")
+    def get_clip(name: str):
+        from flask import send_file
+        mp4 = clips_mod.clip_path(name)
+        if mp4 is not None:
+            return send_file(mp4, mimetype="video/mp4", conditional=True)
+        # Check if the mkv exists but mp4 isn't ready yet
+        from pathlib import Path
+        if not clips_mod._valid_name(name):
+            return jsonify({"error": "invalid_name"}), 404
+        mkv = (clips_mod.CLIPS_DIR / Path(name).with_suffix(".mkv").name).resolve()
+        if mkv.exists():
+            clips_mod.remux_async(mkv)
+            return jsonify({"status": "processing"}), 202
+        return jsonify({"error": "not_found"}), 404
+
+    @app.delete("/api/clips/<name>")
+    def delete_clip_single(name: str):
+        if clips_mod.is_remuxing(name):
+            return jsonify({"error": "remux_in_progress"}), 409
+        ok, reason = clips_mod.delete_clip(name)
+        if not ok:
+            if "traversal" in reason or "invalid" in reason:
+                return jsonify({"error": reason}), 400
+            if "remux" in reason:
+                return jsonify({"error": reason}), 409
+            return jsonify({"error": reason}), 404
+        bridge.socketio.emit("clip_changed", {})
+        return "", 204
+
+    @app.post("/api/clips/delete")
+    def bulk_delete_clips():
+        body = request.get_json(silent=True) or {}
+        names = body.get("names", [])
+        if not isinstance(names, list):
+            return jsonify({"error": "names must be a list"}), 400
+        # Validate all names before deleting any
+        for n in names:
+            if not clips_mod._valid_name(n):
+                return jsonify({"error": f"invalid name: {n}"}), 400
+        deleted = []
+        failed = []
+        for n in names:
+            ok, reason = clips_mod.delete_clip(n)
+            if ok:
+                deleted.append(n)
+            else:
+                failed.append({"name": n, "reason": reason})
+        bridge.socketio.emit("clip_changed", {})
+        return jsonify({"deleted": deleted, "failed": failed})

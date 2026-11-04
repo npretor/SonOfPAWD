@@ -20,6 +20,7 @@ _SERVICES: Dict[str, str] = {
     "recorder":         "user",
     "hub":              "user",
     "ui-backend":       "user",
+    "inference":        "user",
     "mediamtx":         "user",
     "mosquitto":        "system",
     "camera-pipeline":  "pi",

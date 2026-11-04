@@ -14,6 +14,8 @@ export interface WhepState {
   gather: RTCIceGathererState;
   bytesReceived: number;
   framesDecoded: number;
+  packetsReceived: number;
+  packetsLost: number;
 }
 
 export interface WhepSession {
@@ -75,13 +77,15 @@ export async function whepStart(
   let statsTimer: ReturnType<typeof setInterval> | null = null;
   if (onStats) {
     statsTimer = setInterval(async () => {
-      let bytes = 0, frames = 0;
+      let bytes = 0, frames = 0, pktsRecv = 0, pktsLost = 0;
       try {
         const stats = await pc.getStats();
         stats.forEach((r: any) => {
           if (r.type === "inbound-rtp" && r.kind === "video") {
             bytes = r.bytesReceived ?? bytes;
             frames = r.framesDecoded ?? frames;
+            pktsRecv = r.packetsReceived ?? pktsRecv;
+            pktsLost = r.packetsLost ?? pktsLost;
           }
         });
       } catch {
@@ -93,6 +97,8 @@ export async function whepStart(
         gather: pc.iceGatheringState,
         bytesReceived: bytes,
         framesDecoded: frames,
+        packetsReceived: pktsRecv,
+        packetsLost: pktsLost,
       });
     }, 1000);
   }

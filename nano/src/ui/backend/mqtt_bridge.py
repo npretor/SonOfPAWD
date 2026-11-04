@@ -13,6 +13,7 @@ Command-direction plumbing (POST /api/mode, /api/fire, etc.) lands in
 routes.py; this module exposes a `publish()` passthrough for that path.
 """
 import logging
+from pathlib import Path
 from threading import Lock
 from typing import Dict, Set
 
@@ -34,6 +35,8 @@ from common.messaging.topics import (
     TOPIC_RECORDER_EVENT,
     TOPIC_TELEMETRY,
 )
+
+from nano.src.ui.backend import clips as clips_mod
 
 log = logging.getLogger("ui.bridge")
 
@@ -107,6 +110,12 @@ class MqttBridge:
 
         self.socketio.on_event("connect", self._on_socket_connect)
 
+        clips_mod.set_remux_done_callback(self._on_remux_done)
+        clips_mod.backfill_remux()
+
+    def _on_remux_done(self, mkv_name: str) -> None:
+        self.socketio.emit("clip_changed", {"name": mkv_name})
+
     def stop(self) -> None:
         try:
             self.mqtt.disconnect()
@@ -132,6 +141,10 @@ class MqttBridge:
             return
         if topic == TOPIC_INFER_DETECT:
             payload = _normalize_detections(payload)
+        if topic == TOPIC_RECORDER_EVENT and payload.get("event") == "clip_closed":
+            path_str = payload.get("path", "")
+            if path_str:
+                clips_mod.remux_async(Path(path_str))
         with self._cache_lock:
             self._latest[topic] = payload
             if topic in _REPLAY_TOPICS:

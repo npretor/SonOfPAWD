@@ -15,3 +15,14 @@ paths:
   live:
     source: rtsp://testcam-64bit.local:8554/live
     # sourceOnDemand: no  # (default) keep the pull warm so first-frame is fast
+
+  # Low-quality path for poor network conditions. Spun up on-demand via FFmpeg
+  # (transcodes from the already-warm 'live' path to 640x360 @ ~600 kbps).
+  # Requires ffmpeg to be installed on the Nano.
+  live_low:
+    runOnDemand: >-
+      ffmpeg -rtsp_transport tcp -i rtsp://localhost:$RTSP_PORT/live
+      -vf scale=640:360 -c:v libx264 -preset ultrafast -tune zerolatency
+      -b:v 600k -g 60 -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnDemandRestart: yes
+    runOnDemandCloseAfter: 10s

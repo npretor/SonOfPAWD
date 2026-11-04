@@ -18,6 +18,10 @@ sudo apt install -y \
     python3-gst-1.0 \
     python3-gi \
     python3-paho-mqtt \
+    python3-numpy \
+    python3-opencv \
+    python3-libnvinfer \
+    python3-libnvinfer-dev \
     avahi-daemon
 
 echo "== create clips directory (recorder needs this to start) =="
@@ -79,6 +83,37 @@ if mosquitto_pub -h localhost -t turret/test/prep -m '{"ts":0,"ok":true}' >/dev/
     echo "  anonymous pub UNEXPECTEDLY SUCCEEDED -- auth is not enforced"; exit 1
 else
     echo "  anonymous pub correctly rejected"
+fi
+
+echo "== inference model dir =="
+sudo mkdir -p /var/lib/turret/models
+sudo chown "$USER":"$USER" /var/lib/turret/models
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+echo "== inference container image =="
+INFERENCE_TAG="${INFERENCE_IMAGE:-turret-inference:r32.7.1}"
+if docker image inspect "$INFERENCE_TAG" >/dev/null 2>&1; then
+    echo "  $INFERENCE_TAG present, skipping"
+else
+    echo "  building $INFERENCE_TAG (first run pulls the L4T base, ~5-10 GB)"
+    "$REPO_ROOT/nano/scripts/build_inference_image.sh" || \
+        echo "  image build failed; inference service will not start until resolved."
+fi
+
+echo "== TensorRT engine =="
+ENGINE_PATH=/var/lib/turret/models/yolov8n.engine
+ONNX_PATH="$REPO_ROOT/nano/src/inference/models/yolov8n.onnx"
+if [ ! -f "$ENGINE_PATH" ]; then
+    if [ -f "$ONNX_PATH" ]; then
+        echo "  building $ENGINE_PATH (this can take 2-4 minutes)"
+        "$REPO_ROOT/nano/scripts/build_engine.sh" || \
+            echo "  engine build failed; inference service will not start until resolved."
+    else
+        echo "  ONNX not committed yet at $ONNX_PATH; skip. Run build_engine.sh later."
+    fi
+else
+    echo "  $ENGINE_PATH exists, skipping"
 fi
 
 echo "== enable lingering for user systemd units =="

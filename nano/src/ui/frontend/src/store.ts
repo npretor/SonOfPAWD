@@ -5,11 +5,21 @@ import { create } from "zustand";
 
 export type ServiceStatus = "up" | "down" | "degraded" | string;
 
+export interface LockonSnapshot {
+  state: "IDLE" | "ACQUIRING" | "LOCKED" | "COOLDOWN";
+  target: string | null;
+  count: number;
+  of: number;
+  cooldown_remaining?: number;
+}
+
 export interface HubState {
   mode: string;
   services: Record<string, ServiceStatus>;
   armed: boolean;
+  recorder_start_ts: number | null;
   ir_on: boolean;
+  lockon?: LockonSnapshot;
   ts: number;
 }
 

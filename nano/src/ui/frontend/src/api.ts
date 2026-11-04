@@ -42,6 +42,8 @@ export const sendAim = (pan: number, tilt: number) =>
   postJson("/api/aim", { pan, tilt });
 export const setMotionEnable = (enabled: boolean) =>
   postJson("/api/motion-ctrl/enable", { enabled });
+export const setRecorderArm = (on: boolean) =>
+  postJson("/api/recorder/arm", { on });
 
 export interface SettingsPayload {
   motion_timeout_s: number;
@@ -92,3 +94,29 @@ export const getCalibration = () =>
 
 export const putCalibration = (c: CalibrationPayload) =>
   putJson<CalibrationPayload>("/api/motion-ctrl/calibration", c);
+
+export interface ClipMeta {
+  name: string;
+  start_ts: string;
+  duration_s: number | null;
+  size_bytes: number;
+  mp4_ready: boolean;
+}
+
+export interface ClipsResponse {
+  clips: ClipMeta[];
+  total_bytes: number;
+}
+
+export const listClips = () => getJson<ClipsResponse>("/api/clips");
+
+export const clipUrl = (name: string) =>
+  `/api/clips/${encodeURIComponent(name)}`;
+
+export interface BulkDeleteResponse {
+  deleted: string[];
+  failed: { name: string; reason: string }[];
+}
+
+export const deleteClips = (names: string[]): Promise<BulkDeleteResponse> =>
+  postJson("/api/clips/delete", { names }).then((r) => r.json());

@@ -54,13 +54,18 @@ make -C deploy start-nano
 make -C deploy logs-nano    # watch for "pipeline PLAYING (rtsp=...)"
 ```
 
-### 4. arm and look for a file                                                                                                           
-mosquitto_pub -h localhost -t turret/recorder/arm -m '{"armed":true}'          
+### 4. arm and look for a file
+```
+mosquitto_pub -h localhost -u turret -P "$(cat /etc/turret/mqtt.password)" \
+    -t turret/recorder/arm -m '{"armed":true}'
+ls -lh /var/lib/turret/clips/
+```
 
-```ls -lh /var/lib/turret/clips/ ```           
-                                                                                                                     
-### 5. wait a few seconds, disarm with short trailing                                                                                    
-```mosquitto_pub -h localhost -t turret/recorder/arm -m '{"armed":false,"trailing_s":3}' ``` 
+### 5. wait a few seconds, disarm with short trailing
+```
+mosquitto_pub -h localhost -u turret -P "$(cat /etc/turret/mqtt.password)" \
+    -t turret/recorder/arm -m '{"armed":false,"trailing_s":3}'
+```
 
 # ~3s later: clip_closed event in the journal, file finalized 
          

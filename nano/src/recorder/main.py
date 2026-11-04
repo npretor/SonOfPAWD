@@ -52,6 +52,10 @@ class Recorder:
         # Cached arm state so we re-apply it after a reconnect
         self._desired_armed = False
         self._desired_trailing_s = TRAILING_SECONDS
+        # True only while we are intentionally recording. Suppresses the
+        # spurious clip_started publish that splitmuxsink fires when split-now
+        # opens the next (empty) fragment after a close.
+        self._is_armed = False
 
     # ----- pipeline construction & lifecycle ------------------------------
 
@@ -126,13 +130,22 @@ class Recorder:
             })
 
     def _on_format_location(self, _mux, _fragment_id):
+        # Called from the pipeline thread when splitmuxsink opens a new file.
         ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
         path = os.path.join(CLIPS_DIR, f"clip_{ts}.mkv")
-        log.info("clip starting: %s", path)
-        self.mqtt.publish(TOPIC_RECORDER_EVENT, {
-            "event": "clip_started",
-            "path": path,
-        })
+        if self._is_armed:
+            log.info("clip starting: %s", path)
+            self.mqtt.publish(TOPIC_RECORDER_EVENT, {
+                "event": "clip_started",
+                "path": path,
+            })
+        else:
+            # Post-close orphan fragment. Close the gate immediately here —
+            # this runs in the pipeline thread synchronously on the split, so
+            # almost no data flows to the orphan file before the valve drops.
+            log.info("clip (orphan, closing gate): %s", path)
+            if self.valve is not None:
+                self.valve.set_property("drop", True)
         return path
 
     # ----- arming logic (always invoked on the GLib main loop thread) -----
@@ -159,6 +172,7 @@ class Recorder:
             return
         if self.valve.get_property("drop"):
             log.info("opening gate")
+            self._is_armed = True
             self.valve.set_property("drop", False)
             if self.mux is not None:
                 self.mux.emit("split-now")
@@ -172,8 +186,13 @@ class Recorder:
     def _close_clip(self):
         log.info("closing clip")
         self._close_timer_id = None
-        if self.valve is not None:
-            self.valve.set_property("drop", True)
+        self._is_armed = False
+        # Emit split-now BEFORE closing the valve. splitmuxsink only performs
+        # the split on the next buffer that arrives; if the valve is already
+        # closed when split-now fires, no buffer ever comes and
+        # splitmuxsink-fragment-closed is never posted, so the bridge never
+        # knows to remux the clip. The valve is closed in _on_format_location
+        # once the orphan fragment begins (pipeline thread, synchronous).
         if self.mux is not None:
             self.mux.emit("split-now")
         return False  # one-shot

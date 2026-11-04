@@ -250,6 +250,24 @@ a:hover { text-decoration: underline; }
   padding: 0.5rem 1.2rem;
   font-size: 1rem;
 }
+.btn-sm {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+}
+.btn.active {
+  background: var(--accent);
+  color: #06121f;
+  border-color: var(--accent);
+}
+
+.quality-selector {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.badge-warn {
+  background: rgba(200, 100, 0, 0.75);
+}
 
 .error {
   color: var(--down);
@@ -271,6 +289,35 @@ a:hover { text-decoration: underline; }
   color: var(--down);
 }
 
+.record-toggle {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+.record-toggle.stopped { border-color: var(--border); color: var(--fg-muted); }
+.record-toggle.recording {
+  background: rgba(229, 72, 77, 0.15);
+  border-color: var(--down);
+  color: var(--down);
+}
+.rec-dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--down);
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
 .aim-toggle {
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -282,6 +329,36 @@ a:hover { text-decoration: underline; }
   background: rgba(74, 163, 255, 0.15);
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.lockon-badge {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  text-transform: uppercase;
+}
+.lockon-badge.acquiring {
+  color: var(--unknown);
+  border-color: var(--unknown);
+  background: rgba(214, 167, 27, 0.12);
+}
+.lockon-badge.locked {
+  color: var(--down);
+  border-color: var(--down);
+  background: rgba(229, 72, 77, 0.18);
+  animation: lockon-pulse 0.6s ease-out 1;
+}
+.lockon-badge.cooldown {
+  color: var(--fg-muted);
+  border-color: var(--border);
+}
+@keyframes lockon-pulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
 }
 
 .fire-wrap { display: flex; align-items: center; gap: 0.5rem; }
@@ -481,4 +558,144 @@ a:hover { text-decoration: underline; }
   white-space: pre;
   color: #c8d3e1;
   min-height: 120px;
+}
+
+/* ---- clips page -------------------------------------------------------- */
+
+.clips-page {
+  padding: 1rem 1rem 4rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.clips-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.clips-toolbar-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.clips-delete-err,
+.clips-err {
+  font-size: 0.85rem;
+}
+
+.clips-empty {
+  padding: 2rem;
+  text-align: center;
+}
+
+.clip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.clip-tile {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  position: relative;
+  transition: border-color 0.1s;
+}
+
+.clip-tile:hover {
+  border-color: var(--accent);
+}
+
+.clip-tile.selected {
+  border-color: var(--accent);
+  background: rgba(74, 163, 255, 0.08);
+  outline: 1px solid var(--accent);
+}
+
+.clip-tile-check {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.clip-tile-icon {
+  text-align: center;
+  font-size: 2rem;
+  padding-top: 0.25rem;
+}
+
+.clip-tile-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.clip-tile-time {
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.clip-tile-stats {
+  font-size: 0.78rem;
+}
+
+.clip-tile-play {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.6rem;
+}
+
+/* ---- video modal ------------------------------------------------------- */
+
+.video-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.video-modal {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: min(90vw, 960px);
+  width: 100%;
+}
+
+.video-modal-player {
+  width: 100%;
+  max-height: 70vh;
+  background: #000;
+  border-radius: 4px;
+  display: block;
+}
+
+.video-modal-close {
+  align-self: flex-end;
+}
+
+.video-modal-name {
+  font-size: 0.8rem;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  word-break: break-all;
 }

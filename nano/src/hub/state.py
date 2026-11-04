@@ -5,7 +5,7 @@ GLib.idle_add before touching this. Keep this module free of I/O so it stays
 unit-testable without a broker or hardware.
 """
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Optional
 
 from nano.src.hub.modes import Mode
 
@@ -20,6 +20,7 @@ class HubState:
     motion_timeout_s: int = 2
     trailing_s: int = 10
     recorder_armed: bool = False
+    recorder_start_ts: Optional[float] = None
     last_motion_ts: float = 0.0
     # "host/service" -> "up" | "down"
     peers: Dict[str, str] = field(default_factory=dict)

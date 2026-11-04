@@ -1,6 +1,7 @@
 import { Link, Route, Routes } from "react-router-dom";
 
 import LogsDrawer from "./components/LogsDrawer";
+import Clips from "./routes/Clips";
 import Dashboard from "./routes/Dashboard";
 import Settings from "./routes/Settings";
 import { useSocketBinding } from "./hooks/useHubState";
@@ -16,11 +17,13 @@ export default function App() {
         <Link to="/" className="brand">SonOfPAWD</Link>
         <nav>
           <Link to="/">Dashboard</Link>
+          <Link to="/clips">Clips</Link>
           <Link to="/settings">Settings</Link>
         </nav>
       </header>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/clips" element={<Clips />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
       <LogsDrawer />

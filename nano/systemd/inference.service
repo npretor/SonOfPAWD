@@ -1,0 +1,20 @@
+[Unit]
+Description=SonOfPAWD inference (TensorRT object detection, containerized)
+After=network-online.target mosquitto.service mediamtx.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/github/SonOfPAWD
+Environment=PYTHONUNBUFFERED=1
+ExecStart=%h/github/SonOfPAWD/nano/scripts/run_inference_container.sh
+ExecStop=/usr/bin/docker stop -t 5 turret-inference
+Restart=on-failure
+RestartSec=3
+# Engine load + CUDA warm-up takes ~5s; allow margin on cold boot.
+TimeoutStartSec=60
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
